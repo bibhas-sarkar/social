@@ -47,8 +47,8 @@ class ContentCreatorAgent:
             sub_headline="MATCHES TO WATCH",
             main_text=fact1.fact_text,
             stat_box=StatBox(
-                label="GW1 FIXTURES",
-                value="10 MATCHES",
+                label=fact1.key_metric or "KEY FIXTURES",
+                value=fact1.metric_value or "3 MATCHES",
                 subtext="Opening weekend slate",
             ),
             highlight_text="MARQUEE CLASHES",

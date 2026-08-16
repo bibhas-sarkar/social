@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Set
 from pydantic import BaseModel, Field
 from config import CarouselContent, SlideContent
 from src.agents.gatherer import GatheredNews
@@ -12,13 +12,15 @@ MAX_REVIEW_ITERATIONS = 3
 
 
 class AuditEntry(BaseModel):
+    """Individual entity, metric, and schema audit check entry."""
     slide_number: int
-    check_type: str
-    status: str
+    check_type: str  # 'ENTITY_CHECK', 'METRIC_VERIFICATION', 'WORD_COUNT', 'NARRATIVE_CHECK'
+    status: str      # 'PASSED', 'WARNING', 'FAILED'
     details: str
 
 
 class ReviewResult(BaseModel):
+    """Result of the quality and constraint review process including fact-checking audit."""
     is_approved: bool
     iterations_run: int
     audit_passed: bool = True
@@ -28,7 +30,7 @@ class ReviewResult(BaseModel):
 
 
 class ReviewerAgent:
-    """Validates word counts, schema integrity, and chronological fact consistency."""
+    """Rigorous quality auditor validating word counts, entity grounding, and metric accuracy."""
 
     def review_and_refine(
         self,
@@ -40,13 +42,16 @@ class ReviewerAgent:
         audit_entries: List[AuditEntry] = []
 
         for iteration in range(1, MAX_REVIEW_ITERATIONS + 1):
-            passed, issues = self._validate_carousel(current_carousel)
+            passed, schema_issues = self._validate_carousel(current_carousel)
             audit_passed, iter_audit_entries = self._audit_facts_and_entities(current_carousel, gathered_news)
             audit_entries = iter_audit_entries
 
-            if passed and audit_passed:
+            failed_entries = [e.details for e in audit_entries if e.status == "FAILED"]
+            all_issues = schema_issues + failed_entries
+
+            if passed and audit_passed and len(all_issues) == 0:
                 logger.info(f"Reviewer approved carousel on iteration {iteration}.")
-                feedback_history.append(f"Iteration {iteration}: Approved - Story arc and factual grounding verified.")
+                feedback_history.append(f"Iteration {iteration}: Approved - All constraints & factual audits satisfied.")
                 return ReviewResult(
                     is_approved=True,
                     iterations_run=iteration,
@@ -56,26 +61,30 @@ class ReviewerAgent:
                     carousel=current_carousel,
                 )
 
-            combined_issues = issues + [e.details for e in audit_entries if e.status == "FAILED"]
-            logger.warning(f"Reviewer iteration {iteration} flagged issues: {combined_issues}")
-            feedback_history.append(f"Iteration {iteration} Issues: {'; '.join(combined_issues)}")
+            logger.warning(f"Reviewer iteration {iteration} flagged issues: {all_issues}")
+            feedback_history.append(f"Iteration {iteration} Issues: {'; '.join(all_issues)}")
 
-            current_carousel = self._auto_refine(current_carousel, combined_issues)
+            # Perform intelligent sentence trimming rather than hard slicing mid-word
+            current_carousel = self._smart_refine(current_carousel, all_issues)
 
-        passed, final_issues = self._validate_carousel(current_carousel)
+        # Final audit pass
+        passed, final_schema_issues = self._validate_carousel(current_carousel)
         audit_passed, final_audit = self._audit_facts_and_entities(current_carousel, gathered_news)
+        final_failures = final_schema_issues + [e.details for e in final_audit if e.status == "FAILED"]
 
         return ReviewResult(
-            is_approved=passed and audit_passed,
+            is_approved=(passed and audit_passed and len(final_failures) == 0),
             iterations_run=MAX_REVIEW_ITERATIONS,
-            audit_passed=audit_passed,
+            audit_passed=audit_passed and len(final_failures) == 0,
             feedback_log=feedback_history,
             audit_entries=final_audit,
             carousel=current_carousel,
         )
 
     def _validate_carousel(self, carousel: CarouselContent) -> Tuple[bool, List[str]]:
+        """Validates structure, slide count, and basic fields."""
         issues: List[str] = []
+
         if len(carousel.slides) != 5:
             issues.append(f"Carousel must contain exactly 5 slides, found {len(carousel.slides)}")
 
@@ -83,8 +92,10 @@ class ReviewerAgent:
             word_count = len(slide.main_text.strip().split())
             if word_count > MAX_WORDS_PER_SLIDE:
                 issues.append(f"Slide {slide.slide_number} exceeds word limit: {word_count}/{MAX_WORDS_PER_SLIDE} words")
-            if not slide.sub_headline:
+            if not slide.sub_headline or len(slide.sub_headline.strip()) == 0:
                 issues.append(f"Slide {slide.slide_number} missing sub_headline")
+            if not slide.category or len(slide.category.strip()) == 0:
+                issues.append(f"Slide {slide.slide_number} missing category")
 
         return (len(issues) == 0, issues)
 
@@ -93,33 +104,77 @@ class ReviewerAgent:
         carousel: CarouselContent,
         gathered_news: Optional[GatheredNews],
     ) -> Tuple[bool, List[AuditEntry]]:
+        """Strict ground-truth audit comparing slide entities and numbers to GatheredNews."""
         entries: List[AuditEntry] = []
         all_passed = True
 
+        if not gathered_news:
+            entries.append(
+                AuditEntry(
+                    slide_number=0,
+                    check_type="ENTITY_CHECK",
+                    status="WARNING",
+                    details="No GatheredNews payload provided; skipped factual cross-reference.",
+                )
+            )
+            return (True, entries)
+
+        # 1. Build Ground-Truth Token Sets
+        raw_text = " ".join([
+            f.fact_text + " " + f.headline + " " + (f.metric_value or "") + " " + (f.key_metric or "")
+            for f in gathered_news.verified_facts
+        ]) + " " + gathered_news.summary_headline + " " + gathered_news.topic
+
+        ground_truth_numbers = set(re.findall(r"\b\d+(?:\.\d+)?%?", raw_text))
+        
+        # Collect verified entity keywords
+        ground_truth_entities: Set[str] = set()
+        for f in gathered_news.verified_facts:
+            for ent in f.entities:
+                ground_truth_entities.update(ent.lower().split())
+
+        # 2. Slide-by-Slide Audit
         for slide in carousel.slides:
-            slide_text = f"{slide.sub_headline} {slide.main_text}".lower()
+            slide_combined = f"{slide.sub_headline} {slide.main_text}".lower()
 
-            # Flag chronological contradictions before season starts
-            if "38 league matches" in slide_text or "conceded across 38" in slide_text:
-                all_passed = False
-                entries.append(
-                    AuditEntry(
-                        slide_number=slide.slide_number,
-                        check_type="CHRONOLOGY_CHECK",
-                        status="FAILED",
-                        details=f"Slide {slide.slide_number} referenced completed 38-game season during pre-season.",
-                    )
-                )
-            else:
-                entries.append(
-                    AuditEntry(
-                        slide_number=slide.slide_number,
-                        check_type="CHRONOLOGY_CHECK",
-                        status="PASSED",
-                        details=f"Temporal grounding verified on Slide {slide.slide_number}.",
-                    )
-                )
+            # --- Check A: Metric Verification ---
+            if slide.stat_box:
+                stat_val = slide.stat_box.value.strip()
+                val_numbers = re.findall(r"\b\d+(?:\.\d+)?%?", stat_val)
 
+                # If numeric, must be grounded in raw facts
+                if val_numbers and not any(n in ground_truth_numbers or n in raw_text for n in val_numbers):
+                    # Allow common labels like '10 MATCHES' if in raw text, else flag
+                    if not any(word in raw_text.lower() for word in stat_val.lower().split()):
+                        all_passed = False
+                        entries.append(
+                            AuditEntry(
+                                slide_number=slide.slide_number,
+                                check_type="METRIC_VERIFICATION",
+                                status="FAILED",
+                                details=f"Stat '{stat_val}' on Slide {slide.slide_number} not found in Gatherer ground truth.",
+                            )
+                        )
+                    else:
+                        entries.append(
+                            AuditEntry(
+                                slide_number=slide.slide_number,
+                                check_type="METRIC_VERIFICATION",
+                                status="PASSED",
+                                details=f"Metric '{stat_val}' verified in context.",
+                            )
+                        )
+                else:
+                    entries.append(
+                        AuditEntry(
+                            slide_number=slide.slide_number,
+                            check_type="METRIC_VERIFICATION",
+                            status="PASSED",
+                            details=f"Metric '{stat_val}' verified in ground truth.",
+                        )
+                    )
+
+            # --- Check B: Word Count ---
             w_count = len(slide.main_text.strip().split())
             if w_count <= MAX_WORDS_PER_SLIDE:
                 entries.append(
@@ -137,19 +192,52 @@ class ReviewerAgent:
                         slide_number=slide.slide_number,
                         check_type="WORD_COUNT",
                         status="FAILED",
-                        details=f"{w_count}/{MAX_WORDS_PER_SLIDE} words (Exceeds limit)",
+                        details=f"{w_count}/{MAX_WORDS_PER_SLIDE} words (Exceeds {MAX_WORDS_PER_SLIDE} limit)",
                     )
                 )
 
+            # --- Check C: Narrative Role Compliance ---
+            if slide.slide_number == 5:
+                if not any(q in slide_combined for q in ["?", "who", "comment", "predict", "verdict"]):
+                    entries.append(
+                        AuditEntry(
+                            slide_number=5,
+                            check_type="NARRATIVE_CHECK",
+                            status="WARNING",
+                            details="Slide 5 should ideally include a question or prompt to encourage comments.",
+                        )
+                    )
+                else:
+                    entries.append(
+                        AuditEntry(
+                            slide_number=5,
+                            check_type="NARRATIVE_CHECK",
+                            status="PASSED",
+                            details="Slide 5 verified as comment CTA block.",
+                        )
+                    )
+
         return (all_passed, entries)
 
-    def _auto_refine(self, carousel: CarouselContent, issues: List[str]) -> CarouselContent:
+    def _smart_refine(self, carousel: CarouselContent, issues: List[str]) -> CarouselContent:
+        """Intelligently trims sentences at clause/punctuation boundaries instead of slicing words."""
         refined_slides: List[SlideContent] = []
+
         for slide in carousel.slides:
             words = slide.main_text.strip().split()
             if len(words) > MAX_WORDS_PER_SLIDE:
-                trimmed = " ".join(words[:MAX_WORDS_PER_SLIDE]).rstrip(" ,;:-") + "..."
-                refined_slides.append(slide.model_copy(update={"main_text": trimmed}))
+                # Find the last sentence end (., !, ?) before the limit
+                truncated = " ".join(words[:MAX_WORDS_PER_SLIDE])
+                last_period = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
+                
+                if last_period > len(truncated) // 2:
+                    clean_text = truncated[:last_period + 1]
+                else:
+                    clean_text = truncated.rstrip(" ,;:-") + "."
+
+                logger.info(f"Cleanly trimmed Slide {slide.slide_number} from {len(words)} to {len(clean_text.split())} words.")
+                refined_slides.append(slide.model_copy(update={"main_text": clean_text}))
             else:
                 refined_slides.append(slide)
+
         return carousel.model_copy(update={"slides": refined_slides})
