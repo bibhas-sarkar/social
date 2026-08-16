@@ -4,13 +4,13 @@ import logging
 from typing import Optional, List
 from config import ChannelConfig, CarouselContent, SlideContent, StatBox, resolve_theme_palette
 from src.agents.gatherer import GatheredNews
-from src.scheduler.matchday_calendar import MatchdayScheduleContext, SchedulePhase
+from src.scheduler.matchday_calendar import MatchdayScheduleContext
 
 logger = logging.getLogger(__name__)
 
 
 class ContentCreatorAgent:
-    """Agent responsible for structuring raw gathered facts into a 5-slide carousel format."""
+    """Agent responsible for structuring gathered facts into a 5-card connected story arc."""
 
     def __init__(self):
         self.anthropic_key = os.getenv("ANTHROPIC_API_KEY") or (
@@ -26,27 +26,21 @@ class ContentCreatorAgent:
         news: GatheredNews,
         schedule_context: Optional[MatchdayScheduleContext] = None,
     ) -> CarouselContent:
-        """Create a 5-slide carousel payload from gathered news with cadence awareness."""
         ctx = schedule_context or news.schedule_context
-        logger.info(f"[{channel.name}] Creating 5-slide structured carousel content...")
-        if ctx:
-            logger.info(f"[{channel.name}] Ingested Cadence: {ctx.phase_name} | Theme: {ctx.theme_badge}")
+        logger.info(f"[{channel.name}] Composing 5-slide connected narrative carousel...")
 
-        # 1. Prioritize Anthropic Claude if configured
         if self.anthropic_key:
             try:
                 return self._create_via_anthropic(channel, news, ctx)
             except Exception as e:
-                logger.warning(f"Anthropic creation failed: {e}. Attempting next method.")
+                logger.warning(f"Anthropic creation failed: {e}. Falling back to deterministic builder.")
 
-        # 2. Try OpenAI if configured
         if self.openai_key:
             try:
                 return self._create_via_openai(channel, news, ctx)
             except Exception as e:
-                logger.warning(f"OpenAI creation failed: {e}. Using deterministic structured engine.")
+                logger.warning(f"OpenAI creation failed: {e}. Falling back to deterministic builder.")
 
-        # Fallback / offline deterministic builder
         return self._create_structured_carousel(channel, news, ctx)
 
     def _create_structured_carousel(
@@ -55,124 +49,100 @@ class ContentCreatorAgent:
         news: GatheredNews,
         ctx: Optional[MatchdayScheduleContext] = None,
     ) -> CarouselContent:
-        """Deterministic 5-slide structured generation following strict constraints."""
         facts = news.verified_facts
-        theme_badge = ctx.theme_badge if ctx else ("BREAKING TACTICS" if channel.key == "matchday" else "SPECIAL REPORT")
-        badge_color = ctx.badge_color if ctx else channel.accent_color
-        phase = ctx.phase if ctx else SchedulePhase.MIDWEEK_ANALYSIS
+        theme_badge = ctx.theme_badge if ctx else "SEASON LAUNCH"
+        palette = resolve_theme_palette(theme_badge)
+        badge_color = palette.primary
 
-        # Dynamic categories based on phase
-        if phase == SchedulePhase.FPL_PREVIEW:
-            cat1, cat2, cat3, cat4, cat5 = "FPL SCOUT", "KEY ASSET STAT", "CAPTAINCY INTEL", "DIFFERENTIAL PICK", "FPL VERDICT"
-        elif phase == SchedulePhase.POST_MATCH_WRAP:
-            cat1, cat2, cat3, cat4, cat5 = "POST-MATCH DEBRIEF", "xG STAT BLOCK", "KEY TRANSITIONS", "TABLE IMPACT", "FAN VERDICT"
-        elif phase == SchedulePhase.PRE_MATCH_PREVIEW:
-            cat1, cat2, cat3, cat4, cat5 = "FIXTURE INTEL", "HEAD-TO-HEAD", "TACTICAL BLUEPRINT", "LINEUP PREVIEW", "YOUR PREDICTION"
-        elif phase == SchedulePhase.LIVE_MATCH_REACTION:
-            cat1, cat2, cat3, cat4, cat5 = "MATCHDAY LIVE", "MOMENTUM STAT", "TACTICAL SHIFT", "STANDINGS MOVE", "HOT TAKE"
-        else:
-            cat1, cat2, cat3, cat4, cat5 = theme_badge, "PRIMARY METRIC", "TACTICAL DYNAMICS", "FORWARD OUTLOOK", "FAN VERDICT"
-
-        # Slide 1: Hook / Headline
-        slide1_text = (
-            f"Essential {theme_badge.lower()} and critical tactical insights for the Premier League."
-            if channel.key == "matchday"
-            else f"Essential briefing and critical takeaways from {channel.name}."
-        )
+        # Slide 1: Hook (Season Kickoff & Opener)
         slide1 = SlideContent(
             slide_number=1,
             total_slides=5,
-            category=cat1,
+            category=theme_badge,
             category_color=badge_color,
-            sub_headline=news.summary_headline,
-            main_text=slide1_text,
-            highlight_text=theme_badge,
+            sub_headline="PREMIER LEAGUE RETURNS",
+            main_text="The 2026/27 campaign kicks off this week as Arsenal host newly-promoted Coventry City at the Emirates. The wait is over.",
+            highlight_text="GW1 KICKOFF",
             source_attribution=news.primary_source,
             brand_handle=channel.brand_handle,
         )
 
-        # Slide 2: Main Point + Key Stat Block
+        # Slide 2: Marquee Opener Match & Key Metric
         fact1 = facts[0] if len(facts) > 0 else None
         slide2 = SlideContent(
             slide_number=2,
             total_slides=5,
-            category=cat2,
+            category="MATCH PREVIEW",
             category_color=badge_color,
-            sub_headline=fact1.headline if fact1 else "Key Benchmark Performance",
-            main_text=fact1.fact_text if fact1 else "Unmatched recovery metrics driving sustained performance.",
+            sub_headline="ARSENAL VS COVENTRY",
+            main_text=fact1.fact_text if fact1 else "Arsenal host Coventry City under Friday night lights to begin the 2026/27 season at Emirates Stadium.",
             stat_box=StatBox(
-                label=fact1.key_metric if (fact1 and fact1.key_metric) else "BENCHMARK",
-                value=fact1.metric_value if (fact1 and fact1.metric_value) else "100%",
-                subtext="Verified analytical metric",
+                label=fact1.key_metric if fact1 and fact1.key_metric else "OPENING MATCH",
+                value=fact1.metric_value if fact1 and fact1.metric_value else "EMIRATES CLASH",
+                subtext="Gameweek 1 Fixture",
             ),
-            highlight_text="KEY METRIC",
+            highlight_text="FRIDAY OPENER",
             source_attribution=fact1.source if fact1 else news.primary_source,
             brand_handle=channel.brand_handle,
         )
 
-        # Slide 3: Tactical / Squad Context
+        # Slide 3: Squad & Transfer Reinforcement
         fact2 = facts[1] if len(facts) > 1 else None
         slide3 = SlideContent(
             slide_number=3,
             total_slides=5,
-            category=cat3,
+            category="SQUAD & TRANSFERS",
             category_color=badge_color,
-            sub_headline=fact2.headline if fact2 else "Tactical Context & Dynamics",
-            main_text=fact2.fact_text if fact2 else "Aggressive traps and pressing structures dictating space.",
+            sub_headline="SUMMER TACTICAL SHIFTS",
+            main_text=fact2.fact_text if fact2 else "Summer reinforcements give Mikel Arteta tactical depth and pressing intensity for the title chase.",
             stat_box=StatBox(
-                label=fact2.key_metric if (fact2 and fact2.key_metric) else "SCALE",
-                value=fact2.metric_value if (fact2 and fact2.metric_value) else "28 SHOTS",
-                subtext="League benchmark rating",
+                label=fact2.key_metric if fact2 and fact2.key_metric else "TACTICAL FOCUS",
+                value=fact2.metric_value if fact2 and fact2.metric_value else "PRESS READY",
+                subtext="Opening campaign readiness",
             ) if fact2 and fact2.key_metric else None,
-            highlight_text="TACTICAL FOCUS",
+            highlight_text="TACTICAL INTEL",
             source_attribution=fact2.source if fact2 else news.primary_source,
             brand_handle=channel.brand_handle,
         )
 
-        # Slide 4: Matchup / Fixture Preview
+        # Slide 4: FPL Gameweek 1 Essential Asset
         fact3 = facts[2] if len(facts) > 2 else None
         slide4 = SlideContent(
             slide_number=4,
             total_slides=5,
-            category=cat4,
+            category="FPL SCOUT",
             category_color=badge_color,
-            sub_headline=fact3.headline if fact3 else "Decisive Matchup Metric",
-            main_text=fact3.fact_text if fact3 else "Execution in high-leverage phases will decide the outcome.",
+            sub_headline="GAMEWEEK 1 CAPTAINS",
+            main_text=fact3.fact_text if fact3 else "Bukayo Saka and Erling Haaland project as premium captaincy anchors for the opening weekend lock.",
             stat_box=StatBox(
-                label=fact3.key_metric if (fact3 and fact3.key_metric) else "BOX CONVERSION",
-                value=fact3.metric_value if (fact3 and fact3.metric_value) else "32.4%",
-                subtext="Big chance conversion rate",
+                label=fact3.key_metric if fact3 and fact3.key_metric else "FPL ESSENTIAL",
+                value=fact3.metric_value if fact3 and fact3.metric_value else "PREMIUM ASSET",
+                subtext="Top projected ceiling",
             ) if fact3 and fact3.key_metric else None,
-            highlight_text="MATCHUP FACTOR",
-            source_attribution=fact3.source if fact3 else news.primary_source,
+            highlight_text="FPL DEADLINE",
+            source_attribution=fact3.source if fact3 else "Fantasy Premier League",
             brand_handle=channel.brand_handle,
         )
 
-        # Slide 5: CTA / Question
-        slide5_sub = "Who Takes All 3 Points?" if channel.key == "matchday" else "What Is Your Take?"
-        slide5_text = (
-            "Drop your score prediction and tactical thoughts in the comments below!"
-            if channel.key == "matchday"
-            else "How will this development impact your workflow and industry outlook?"
-        )
+        # Slide 5: Fan Debate & Community Prediction
         slide5 = SlideContent(
             slide_number=5,
             total_slides=5,
-            category=cat5,
+            category="FAN VERDICT",
             category_color=badge_color,
-            sub_headline=slide5_sub,
-            main_text=slide5_text,
-            stat_box=None,
-            highlight_text="HAVE YOUR SAY",
+            sub_headline="PREDICT THE OPENER",
+            main_text="Can Coventry shock the Emirates, or will Arsenal start with a statement win? Drop your score predictions below!",
+            highlight_text="YOUR VERDICT",
             source_attribution=channel.brand_handle,
             brand_handle=channel.brand_handle,
         )
 
-        hashtags = ctx.suggested_hashtags if (ctx and ctx.suggested_hashtags) else channel.default_hashtags
+        hashtags = ctx.suggested_hashtags if ctx and ctx.suggested_hashtags else channel.default_hashtags
         caption = (
-            f"🔥 [{theme_badge}] {news.summary_headline}\n\n"
-            f"Swipe through for the complete 5-card breakdown and key Opta metrics.\n\n"
-            f"👇 Have your say! Drop your thoughts in the comments below.\n\n"
+            f"🚨 [{theme_badge}] Premier League Football is BACK!\n\n"
+            f"Arsenal host Coventry City at the Emirates to kick off Gameweek 1.\n"
+            f"Swipe through for the complete opening match tactical preview, transfer breakdown & FPL captaincy advice.\n\n"
+            f"👇 Predict the opening scoreline in the comments!\n\n"
             f"{' '.join(hashtags)}"
         )
 
@@ -192,119 +162,35 @@ class ContentCreatorAgent:
         news: GatheredNews,
         ctx: Optional[MatchdayScheduleContext] = None,
     ) -> CarouselContent:
-        """Generate structured 5-slide carousel using Anthropic Claude."""
         import anthropic
         client = anthropic.Anthropic(api_key=self.anthropic_key)
 
-        theme_badge = ctx.theme_badge if ctx else "BREAKING TACTICS"
+        theme_badge = ctx.theme_badge if ctx else "SEASON LAUNCH"
         palette = resolve_theme_palette(theme_badge)
         badge_color = palette.primary
-        phase_guidance = (
-            f"Active Publishing Cadence: {ctx.phase_name}\n"
-            f"Theme Badge: {ctx.theme_badge}\n"
-            f"Cadence Objective: {ctx.prompt_guidance}\n"
-            if ctx
-            else ""
-        )
-        hashtags = ctx.suggested_hashtags if (ctx and ctx.suggested_hashtags) else channel.default_hashtags
 
-        prompt = f"""You are an elite sports & news social media card copywriter for '{channel.name}' ({channel.brand_handle}).
-Brand guidelines:
-- Email identity: {channel.email}
-- Tone: High-impact, tactical, authoritative, engaging.
-- Topic: {news.topic}
-- Verified Calendar Date: {news.calendar_date_utc}
-{phase_guidance}
-- Facts gathered (GROUND TRUTH): {news.model_dump_json()}
+        prompt = f"""You are the Senior Editorial Copywriter for '{channel.name}'.
+Verified Context: {news.model_dump_json()}
+Opening Fixture: Arsenal vs Coventry City (Emirates Stadium)
+Verified Date: {news.calendar_date_utc}
 
-EXTRACTIVE INTEGRITY & ZERO-HALLUCINATION POLICY:
-- Base all copy strictly and solely on the verified facts, numerical statistics, and player/club entity relationships in the provided JSON.
-- Do NOT invent or swap player clubs, transfer rumors, or statistics outside the provided JSON.
-- Every claim on every slide must be 100% grounded in the input facts.
+Write a high-impact, cohesive 5-slide Instagram carousel following this EXACT story arc:
+- Slide 1: Hook Headline (Season kickoff & Arsenal vs Coventry opener at Emirates)
+- Slide 2: Match Preview Focus (Arsenal vs Coventry tactical key with stat_box)
+- Slide 3: Squad & Transfer Dynamic (New signings & tactical depth)
+- Slide 4: FPL Gameweek 1 Essential (Captaincy choices & deadline reminder with stat_box)
+- Slide 5: Fan Debate Call-To-Action (Score prediction question, no stat_box)
 
-Generate an ultra-engaging 5-slide social carousel JSON according to these exact guidelines:
-- Slide 1: Hook / Breaking headline (category: '{theme_badge}', no stat_box)
-- Slide 2: Main Point + Key Stat Block (category: 'KEY STAT BLOCK' or contextual phase badge, must include stat_box with uppercase 'label' and 'value')
-- Slide 3: Tactical / Squad Context (category: 'TACTICAL DYNAMICS')
-- Slide 4: Matchup / Fixture Preview (category: 'FIXTURE PREVIEW')
-- Slide 5: CTA / Question to spark comments (category: 'FAN VERDICT', no stat_box)
-
-CRITICAL RULES:
-1. 'main_text' on EVERY slide MUST be strictly 30 words or fewer. Keep sentences punchy and high impact.
-2. Return ONLY valid JSON with no markdown wrapping or explanations.
-
-Exact JSON structure:
-{{
-  "headline": "Short master headline",
-  "caption": "Full Instagram / Facebook post caption with emojis and call to action",
-  "hashtags": {json.dumps(hashtags)},
-  "badge_color": "{badge_color}",
-  "slides": [
-    {{
-      "slide_number": 1,
-      "category": "{theme_badge}",
-      "category_color": "{badge_color}",
-      "sub_headline": "Punchy Sub-Headline",
-      "main_text": "Body text under 30 words.",
-      "highlight_text": "SHORT BADGE TEXT",
-      "source_attribution": "{news.primary_source}",
-      "stat_box": null
-    }},
-    {{
-      "slide_number": 2,
-      "category": "KEY STAT BLOCK",
-      "category_color": "{badge_color}",
-      "sub_headline": "Stat Sub-Headline",
-      "main_text": "Body text under 30 words.",
-      "highlight_text": "KEY METRIC",
-      "source_attribution": "Opta Sports",
-      "stat_box": {{
-        "label": "RECOVERY RATE",
-        "value": "8.4 / 90",
-        "subtext": "League leader"
-      }}
-    }},
-    {{
-      "slide_number": 3,
-      "category": "TACTICAL DYNAMICS",
-      "category_color": "{badge_color}",
-      "sub_headline": "Tactical Sub-Headline",
-      "main_text": "Body text under 30 words.",
-      "highlight_text": "TACTICAL SHIFT",
-      "source_attribution": "The Athletic",
-      "stat_box": null
-    }},
-    {{
-      "slide_number": 4,
-      "category": "FIXTURE PREVIEW",
-      "category_color": "{badge_color}",
-      "sub_headline": "Fixture Sub-Headline",
-      "main_text": "Body text under 30 words.",
-      "highlight_text": "MATCHUP IMPACT",
-      "source_attribution": "{news.primary_source}",
-      "stat_box": {{
-        "label": "BIG CHANCES",
-        "value": "3.1 / GAME",
-        "subtext": "Key fixture metric"
-      }}
-    }},
-    {{
-      "slide_number": 5,
-      "category": "FAN VERDICT",
-      "category_color": "{badge_color}",
-      "sub_headline": "Who Takes All 3 Points?",
-      "main_text": "Drop your score prediction and tactical thoughts in the comments below!",
-      "highlight_text": "JOIN THE DEBATE",
-      "source_attribution": "{channel.brand_handle}",
-      "stat_box": null
-    }}
-  ]
-}}"""
+STRICT RULES:
+1. Body text on EVERY slide must be 28 words or fewer.
+2. Only use verified active player-club pairings from the input.
+3. Return strictly JSON with no markdown fences."""
 
         candidate_models = [
             "claude-sonnet-4-5-20250929",
             "claude-haiku-4-5-20251001",
             "claude-sonnet-4-6",
+            "claude-3-5-sonnet-20241022",
             "claude-opus-4-5-20251101",
         ]
 
@@ -315,10 +201,8 @@ Exact JSON structure:
                 response = client.messages.create(
                     model=model_name,
                     max_tokens=2048,
-                    temperature=0.3,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ],
+                    temperature=0.2,
+                    messages=[{"role": "user", "content": prompt}],
                 )
                 if response:
                     break
@@ -336,7 +220,7 @@ Exact JSON structure:
             raw_text = raw_text.split("```")[1].split("```")[0].strip()
 
         data = json.loads(raw_text)
-        slides: List[SlideContent] = []
+        slides = []
         for i, s in enumerate(data["slides"], start=1):
             stat_box = StatBox(**s["stat_box"]) if s.get("stat_box") else None
             slides.append(
@@ -345,7 +229,7 @@ Exact JSON structure:
                     total_slides=5,
                     category=s.get("category", theme_badge),
                     category_color=s.get("category_color", badge_color),
-                    sub_headline=s.get("sub_headline", "Tactical Update"),
+                    sub_headline=s.get("sub_headline", "Matchday Update"),
                     main_text=s.get("main_text", ""),
                     stat_box=stat_box,
                     highlight_text=s.get("highlight_text"),
@@ -360,7 +244,7 @@ Exact JSON structure:
             headline=data.get("headline", news.summary_headline),
             caption=data.get("caption", ""),
             badge_color=badge_color,
-            hashtags=data.get("hashtags", hashtags),
+            hashtags=data.get("hashtags", ctx.suggested_hashtags if ctx else channel.default_hashtags),
             slides=slides,
         )
 
@@ -370,39 +254,31 @@ Exact JSON structure:
         news: GatheredNews,
         ctx: Optional[MatchdayScheduleContext] = None,
     ) -> CarouselContent:
-        """Generate structured 5-slide carousel using OpenAI."""
         from openai import OpenAI
         client = OpenAI(api_key=self.openai_key)
 
-        theme_badge = ctx.theme_badge if ctx else "BREAKING TACTICS"
-        badge_color = ctx.badge_color if ctx else channel.accent_color
-        hashtags = ctx.suggested_hashtags if (ctx and ctx.suggested_hashtags) else channel.default_hashtags
+        theme_badge = ctx.theme_badge if ctx else "SEASON LAUNCH"
+        palette = resolve_theme_palette(theme_badge)
+        badge_color = palette.primary
 
-        prompt = f"""You are a master social media card writer for '{channel.name}' ({channel.brand_handle}).
-Facts gathered: {news.model_dump_json()}
-Theme badge: {theme_badge}
-
-Generate an ultra-engaging 5-slide social carousel JSON according to these exact guidelines:
-- Slide 1: Hook / Breaking headline (category: '{theme_badge}')
-- Slide 2: Main Point + Key Stat Block (include stat_box)
-- Slide 3: Tactical / Squad Context
-- Slide 4: Matchup / Fixture Preview
-- Slide 5: CTA / Question to spark comments (no stat_box)
-
-CRITICAL REQUIREMENT: 'main_text' on EVERY slide MUST be 30 words or fewer. Keep sentences punchy, high impact."""
+        prompt = f"""Format this verified football intel into a 5-card carousel:
+Intel: {news.model_dump_json()}
+Opener: Arsenal vs Coventry City
+Story Arc: 1. Season Hook, 2. Match Preview, 3. Transfers, 4. FPL GW1, 5. Score Debate.
+Constraint: Max 28 words per slide main_text."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You output strict JSON following the exact schema requested."},
+                {"role": "system", "content": "Return valid JSON only matching CarouselContent schema."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.3,
+            temperature=0.2,
         )
 
         data = json.loads(response.choices[0].message.content)
-        slides: List[SlideContent] = []
+        slides = []
         for i, s in enumerate(data["slides"], start=1):
             stat_box = StatBox(**s["stat_box"]) if s.get("stat_box") else None
             slides.append(
@@ -410,8 +286,8 @@ CRITICAL REQUIREMENT: 'main_text' on EVERY slide MUST be 30 words or fewer. Keep
                     slide_number=i,
                     total_slides=5,
                     category=s.get("category", theme_badge),
-                    category_color=s.get("category_color", badge_color),
-                    sub_headline=s.get("sub_headline", "Tactical Update"),
+                    category_color=badge_color,
+                    sub_headline=s.get("sub_headline", "Matchday Update"),
                     main_text=s.get("main_text", ""),
                     stat_box=stat_box,
                     highlight_text=s.get("highlight_text"),
@@ -426,6 +302,6 @@ CRITICAL REQUIREMENT: 'main_text' on EVERY slide MUST be 30 words or fewer. Keep
             headline=data.get("headline", news.summary_headline),
             caption=data.get("caption", ""),
             badge_color=badge_color,
-            hashtags=data.get("hashtags", hashtags),
+            hashtags=data.get("hashtags", ctx.suggested_hashtags if ctx else channel.default_hashtags),
             slides=slides,
         )
