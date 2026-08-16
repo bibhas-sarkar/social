@@ -12,14 +12,25 @@ class ContentCreatorAgent:
     """Agent responsible for structuring raw gathered facts into a 5-slide carousel format."""
 
     def __init__(self):
-        self.openai_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
-        self.anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        self.anthropic_key = os.getenv("ANTHROPIC_API_KEY") or (
+            os.getenv("LLM_API_KEY") if (os.getenv("LLM_API_KEY") or "").startswith("sk-ant-") else None
+        )
+        self.openai_key = os.getenv("OPENAI_API_KEY") or (
+            os.getenv("LLM_API_KEY") if (os.getenv("LLM_API_KEY") or "").startswith("sk-") and not (os.getenv("LLM_API_KEY") or "").startswith("sk-ant-") else None
+        )
 
     def create(self, channel: ChannelConfig, news: GatheredNews) -> CarouselContent:
         """Create a 5-slide carousel payload from gathered news."""
         logger.info(f"[{channel.name}] Creating 5-slide structured carousel content...")
 
-        # If LLM key is configured, use LLM for creative wording
+        # 1. Prioritize Anthropic Claude if configured
+        if self.anthropic_key:
+            try:
+                return self._create_via_anthropic(channel, news)
+            except Exception as e:
+                logger.warning(f"Anthropic creation failed: {e}. Attempting next method.")
+
+        # 2. Try OpenAI if configured
         if self.openai_key:
             try:
                 return self._create_via_openai(channel, news)
@@ -139,6 +150,153 @@ class ContentCreatorAgent:
             caption=caption,
             hashtags=channel.default_hashtags,
             slides=[slide1, slide2, slide3, slide4, slide5],
+        )
+
+    def _create_via_anthropic(self, channel: ChannelConfig, news: GatheredNews) -> CarouselContent:
+        """Generate structured 5-slide carousel using Anthropic Claude."""
+        import anthropic
+        client = anthropic.Anthropic(api_key=self.anthropic_key)
+
+        prompt = f"""You are an elite sports & news social media card copywriter for '{channel.name}' ({channel.brand_handle}).
+Brand guidelines:
+- Email identity: {channel.email}
+- Tone: High-impact, tactical, authoritative, engaging.
+- Topic: {news.topic}
+- Facts gathered: {news.model_dump_json()}
+
+Generate an ultra-engaging 5-slide social carousel JSON according to these exact guidelines:
+- Slide 1: Hook / Breaking headline (category: 'BREAKING TACTICS' or similar, no stat_box)
+- Slide 2: Main Point + Key Stat Block (category: 'KEY STAT BLOCK', must include stat_box with uppercase 'label' and 'value')
+- Slide 3: Tactical / Squad Context (category: 'TACTICAL DYNAMICS')
+- Slide 4: Matchup / Fixture Preview (category: 'FIXTURE PREVIEW')
+- Slide 5: CTA / Question to spark comments (category: 'FAN VERDICT', no stat_box)
+
+CRITICAL RULES:
+1. 'main_text' on EVERY slide MUST be strictly 30 words or fewer. Keep sentences punchy and high impact.
+2. Return ONLY valid JSON with no markdown wrapping or explanations.
+
+Exact JSON structure:
+{{
+  "headline": "Short master headline",
+  "caption": "Full Instagram / Facebook post caption with emojis and call to action",
+  "hashtags": {json.dumps(channel.default_hashtags)},
+  "slides": [
+    {{
+      "slide_number": 1,
+      "category": "BREAKING TACTICS",
+      "sub_headline": "Punchy Sub-Headline",
+      "main_text": "Body text under 30 words.",
+      "highlight_text": "SHORT BADGE TEXT",
+      "source_attribution": "{news.primary_source}",
+      "stat_box": null
+    }},
+    {{
+      "slide_number": 2,
+      "category": "KEY STAT BLOCK",
+      "sub_headline": "Stat Sub-Headline",
+      "main_text": "Body text under 30 words.",
+      "highlight_text": "KEY METRIC",
+      "source_attribution": "Opta Sports",
+      "stat_box": {{
+        "label": "RECOVERY RATE",
+        "value": "8.4 / 90",
+        "subtext": "League leader"
+      }}
+    }},
+    {{
+      "slide_number": 3,
+      "category": "TACTICAL DYNAMICS",
+      "sub_headline": "Tactical Sub-Headline",
+      "main_text": "Body text under 30 words.",
+      "highlight_text": "TACTICAL SHIFT",
+      "source_attribution": "The Athletic",
+      "stat_box": null
+    }},
+    {{
+      "slide_number": 4,
+      "category": "FIXTURE PREVIEW",
+      "sub_headline": "Fixture Sub-Headline",
+      "main_text": "Body text under 30 words.",
+      "highlight_text": "MATCHUP IMPACT",
+      "source_attribution": "{news.primary_source}",
+      "stat_box": {{
+        "label": "BIG CHANCES",
+        "value": "3.1 / GAME",
+        "subtext": "Key fixture metric"
+      }}
+    }},
+    {{
+      "slide_number": 5,
+      "category": "FAN VERDICT",
+      "sub_headline": "Who Takes All 3 Points?",
+      "main_text": "Drop your score prediction and tactical thoughts in the comments below!",
+      "highlight_text": "JOIN THE DEBATE",
+      "source_attribution": "{channel.brand_handle}",
+      "stat_box": null
+    }}
+  ]
+}}"""
+
+        # Try preferred Claude models in order
+        candidate_models = [
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5-20251001",
+            "claude-sonnet-4-6",
+            "claude-opus-4-5-20251101",
+        ]
+
+        response = None
+        last_err = None
+        for model_name in candidate_models:
+            try:
+                response = client.messages.create(
+                    model=model_name,
+                    max_tokens=2048,
+                    temperature=0.3,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                )
+                if response:
+                    break
+            except Exception as err:
+                last_err = err
+                continue
+
+        if not response:
+            raise RuntimeError(f"All Anthropic models failed. Last error: {last_err}")
+
+        raw_text = response.content[0].text.strip()
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+        data = json.loads(raw_text)
+        slides: List[SlideContent] = []
+        for i, s in enumerate(data["slides"], start=1):
+            stat_box = StatBox(**s["stat_box"]) if s.get("stat_box") else None
+            slides.append(
+                SlideContent(
+                    slide_number=i,
+                    total_slides=5,
+                    category=s.get("category", "MATCHDAY INSIGHT"),
+                    sub_headline=s.get("sub_headline", "Tactical Update"),
+                    main_text=s.get("main_text", ""),
+                    stat_box=stat_box,
+                    highlight_text=s.get("highlight_text"),
+                    source_attribution=s.get("source_attribution", news.primary_source),
+                    brand_handle=channel.brand_handle,
+                )
+            )
+
+        return CarouselContent(
+            channel_key=channel.key,
+            topic=news.topic,
+            headline=data.get("headline", news.summary_headline),
+            caption=data.get("caption", ""),
+            hashtags=data.get("hashtags", channel.default_hashtags),
+            slides=slides,
         )
 
     def _create_via_openai(self, channel: ChannelConfig, news: GatheredNews) -> CarouselContent:
