@@ -24,6 +24,7 @@ class SlideContent(BaseModel):
     slide_number: int = Field(description="1-based slide index (1 to 5)")
     total_slides: int = Field(default=5, description="Total number of slides")
     category: str = Field(description="Badge text e.g. 'BREAKING TACTICS', 'SQUAD UPDATE', 'MATCH PREVIEW'")
+    category_color: Optional[str] = Field(default=None, description="Custom hex color for category badge dot/border")
     sub_headline: str = Field(description="Punchy sub-headline or context hook")
     main_text: str = Field(description="Main body text, must be concise (<= 30 words)")
     stat_box: Optional[StatBox] = Field(default=None, description="Optional stat metric block")
@@ -38,6 +39,7 @@ class CarouselContent(BaseModel):
     topic: str
     headline: str
     caption: str
+    badge_color: Optional[str] = Field(default=None, description="Theme badge color for the carousel")
     hashtags: List[str] = Field(default_factory=list)
     slides: List[SlideContent] = Field(min_length=5, max_length=5)
 

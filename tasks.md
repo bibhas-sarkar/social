@@ -1,32 +1,33 @@
 # Autonomous Publishing Engine - Task Checklist
 
 - [x] **1. Project Setup & Environment Configuration**
-  - [x] Create `requirements.txt` with required dependencies (`playwright`, `jinja2`, `requests`, `python-dotenv`, `pydantic`, `openai`, `anthropic`, `rich`).
-  - [x] Create `.env.example` with standard keys (`PERPLEXITY_API_KEY`, `LLM_API_KEY`, `META_SYSTEM_USER_TOKEN`, `MATCHDAY_FB_PAGE_ID`, `MATCHDAY_IG_ACCOUNT_ID`).
-  - [x] Set up virtual environment and install dependencies & Playwright Chromium browser.
+  - [x] Create `requirements.txt` with required dependencies.
+  - [x] Create `.env.example` and `.env` support.
+  - [x] Set up virtual environment and install dependencies + Playwright Chromium.
 - [x] **2. Core Configuration & Multi-Channel Registry (`config.py`)**
-  - [x] Define `ChannelConfig` Pydantic model (`name`, `email`, `fb_page_id`, `ig_account_id`, `access_token`, `template_path`, `topic_prompt`, `brand_handle`, etc.).
-  - [x] Define `SlideContent` and `CarouselContent` Pydantic models for structured type safety.
-  - [x] Set up `CHANNELS` registry dictionary with default `matchday` configuration and extension points for future verticals (`worldnews`, `tech`).
+  - [x] Define `ChannelConfig` and `CarouselContent` Pydantic models.
+  - [x] Register default `matchday`, `worldnews`, `tech` channels.
 - [x] **3. HTML/CSS Visual Card Templates (`src/templates/matchday_card.html`)**
-  - [x] Design high-contrast 1080x1350 (4:5 aspect ratio) dark-mode sports layout.
-  - [x] Include vibrant gradients, sport badges, slide progress indicator (`slide_number`/`total_slides`), headline, main text, stat box, and brand handle footer.
+  - [x] Design high-contrast 1080x1350 dark-mode layout.
 - [x] **4. Playwright Headless Renderer (`src/renderer/card_renderer.py`)**
-  - [x] Build Jinja2 template rendering logic with dynamic variables.
-  - [x] Implement headless Playwright browser automation with viewport set to 1080x1350, device scale factor = 2 for ultra-crisp output.
-  - [x] Export 5 PNG slides to `./dist/{channel_name}/`.
+  - [x] Headless Chromium rendering HTML to 1080x1350 PNG cards.
 - [x] **5. Agent Pipeline Implementation (`src/agents/`)**
-  - [x] `src/agents/gatherer.py`: Perplexity / LLM / Sports API news gathering with robust offline/mock fallback for dry runs.
-  - [x] `src/agents/creator.py`: 5-slide JSON schema generation (Hook, Main Point + Stat Block, Tactical Context, Fixture Preview, CTA).
-  - [x] `src/agents/reviewer.py`: Schema validation, word count verification (≤30 words per slide), readability check, and auto-refinement loop (max 3 iterations).
-  - [x] `src/agents/social_publisher.py`: Meta Graph API for Instagram Carousels (container creation -> carousel container -> polling status -> publish) & Facebook multi-photo posts.
-  - [x] `src/agents/monitor.py`: Post-publish 24h/48h analytics gathering and performance feedback loop.
-- [x] **6. Orchestrator CLI (`main.py`)**
-  - [x] Implement CLI with `--channel`, `--dry-run`, and topic override arguments.
-  - [x] Connect full Gatherer -> Creator -> Reviewer -> Renderer -> Publisher pipeline.
-- [x] **7. End-to-End Testing & Verification**
-  - [x] Run dry-run execution: `python main.py --channel matchday --dry-run`.
-  - [x] Verify generated 1080x1350 PNG cards in `./dist/matchday/`.
-  - [x] Test edge cases and validate word count limits and slide layouts.
-- [x] **8. Git Commit & Push**
-  - [x] Stage all changes, commit, and push directly to `master`.
+  - [x] Perplexity Gatherer with Opta data extraction.
+  - [x] Anthropic Claude Content Creator with strict ≤30 words/slide rule.
+  - [x] Reviewer Agent with auto-refinement feedback loop.
+  - [x] Meta Graph API Social Publisher (Instagram & Facebook).
+  - [x] 24h/48h Analytics Monitor feedback loop.
+- [x] **6. Schedule-Aware Automation & Cadence Routing (`src/scheduler/`)**
+  - [x] Implement `src/scheduler/matchday_calendar.py` with schedule phases (`POST_MATCH_WRAP`, `MIDWEEK_ANALYSIS`, `FPL_PREVIEW`, `PRE_MATCH_PREVIEW`, `LIVE_MATCH_REACTION`).
+  - [x] Support dynamic resolution based on UTC/local weekday, time, and custom manual overrides.
+- [x] **7. Dynamic Context Integration in Gatherer & Creator Agents**
+  - [x] Update `src/agents/gatherer.py` to ingest `schedule_context` and tailor prompt / news extraction.
+  - [x] Update `src/agents/creator.py` to ingest `schedule_context` and produce contextual theme badges ("FPL SCOUT", "FIXTURE INTEL", "OPTA BREAKDOWN", etc.).
+- [x] **8. Dynamic Badge Colorization in Jinja2 Template**
+  - [x] Update `src/templates/matchday_card.html` with dynamic badge styles: Red (Breaking/Injuries), Emerald (FPL/Stats), Cyan (Tactics), Purple (Post-Match Debrief), Amber (Fixture Preview).
+- [x] **9. CLI Auto Mode (`main.py --auto`) & Orchestration**
+  - [x] Add `--auto` flag in `main.py` to resolve current calendar phase automatically and run full pipeline.
+- [x] **10. Verification & Master Git Push**
+  - [x] Test `--auto --dry-run` and specific phase runs.
+  - [x] Check generated PNG cards in `./dist/matchday/`.
+  - [x] Update `walkthrough.md` and push all changes directly to `master`.

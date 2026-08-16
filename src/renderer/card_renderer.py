@@ -19,7 +19,12 @@ class CardRenderer:
             autoescape=select_autoescape(["html", "xml"]),
         )
 
-    def render_slide_html(self, channel: ChannelConfig, slide: SlideContent) -> str:
+    def render_slide_html(
+        self,
+        channel: ChannelConfig,
+        slide: SlideContent,
+        badge_color: Optional[str] = None,
+    ) -> str:
         """Render a single slide HTML using Jinja2."""
         template = self.jinja_env.get_template(channel.template_path)
         context = {
@@ -29,6 +34,8 @@ class CardRenderer:
             "category_name": channel.category_name,
             "accent_color": channel.accent_color,
             "secondary_color": channel.secondary_color,
+            "badge_color": badge_color,
+            "category_color": slide.category_color,
             "category": slide.category,
             "slide_number": slide.slide_number,
             "total_slides": slide.total_slides,
@@ -69,7 +76,9 @@ class CardRenderer:
             page = await context.new_page()
 
             for slide in carousel.slides:
-                html_content = self.render_slide_html(channel, slide)
+                html_content = self.render_slide_html(
+                    channel, slide, badge_color=carousel.badge_color
+                )
                 
                 # Set content and ensure web fonts & network requests complete
                 await page.set_content(html_content, wait_until="networkidle")
