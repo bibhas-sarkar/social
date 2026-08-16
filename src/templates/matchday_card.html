@@ -10,21 +10,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
   
-  <!-- Dynamic Color Computation -->
+  <!-- Dynamic Color Palette Computation -->
   {% set theme_color = badge_color | default(category_color | default(accent_color | default("#00FF87"))) %}
   
   <!-- Determine Category Pill Color based on Category String if not explicitly set -->
   {% if category_color %}
     {% set pill_color = category_color %}
-  {% elif 'BREAK' in category|upper or 'INJUR' in category|upper or 'LIVE' in category|upper %}
-    {% set pill_color = '#EF4444' %}
+  {% elif 'BREAK' in category|upper or 'INJUR' in category|upper or 'LIVE' in category|upper or 'HOT TAKE' in category|upper %}
+    {% set pill_color = '#F43F5E' %}
   {% elif 'TACTIC' in category|upper or 'BLUEPRINT' in category|upper or 'SYSTEM' in category|upper or 'OPTA' in category|upper %}
     {% set pill_color = '#00F0FF' %}
-  {% elif 'FPL' in category|upper or 'SCOUT' in category|upper or 'STAT' in category|upper %}
+  {% elif 'FPL' in category|upper or 'SCOUT' in category|upper or 'CAPTAIN' in category|upper or 'DIFFERENTIAL' in category|upper %}
+    {% set pill_color = '#F59E0B' %}
+  {% elif 'DEBRIEF' in category|upper or 'WRAP' in category|upper or 'AUTOPSY' in category|upper or 'REVIEW' in category|upper or 'RESULT' in category|upper %}
     {% set pill_color = '#00FF87' %}
   {% elif 'PREVIEW' in category|upper or 'INTEL' in category|upper or 'FIXTURE' in category|upper or 'MARQUEE' in category|upper %}
-    {% set pill_color = '#F59E0B' %}
-  {% elif 'DEBRIEF' in category|upper or 'WRAP' in category|upper or 'AUTOPSY' in category|upper or 'REVIEW' in category|upper %}
     {% set pill_color = '#A855F7' %}
   {% else %}
     {% set pill_color = theme_color %}
@@ -39,10 +39,10 @@
           colors: {
             brand: {
               accent: '{{ theme_color }}',
+              pill: '{{ pill_color }}',
               purple: '{{ secondary_color | default("#38003C") }}',
               dark: '#07090E',
               card: '#0F141F',
-              cyan: '#00F0FF',
             }
           },
           fontFamily: {
@@ -76,9 +76,9 @@
     /* Ambient Sports Lighting & Background Grids */
     .bg-mesh {
       background-image: 
-        radial-gradient(circle at 10% 15%, {{ pill_color }}25 0%, transparent 45%),
+        radial-gradient(circle at 10% 15%, {{ pill_color }}2E 0%, transparent 45%),
         radial-gradient(circle at 90% 85%, {{ secondary_color | default("#38003C") }}80 0%, transparent 50%),
-        radial-gradient(circle at 50% 50%, {{ theme_color }}0D 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, {{ theme_color }}10 0%, transparent 60%),
         linear-gradient(180deg, #070a10 0%, #030508 100%);
     }
 
@@ -90,7 +90,7 @@
     }
 
     .accent-gradient-text {
-      background: linear-gradient(135deg, #FFFFFF 20%, {{ theme_color }} 100%);
+      background: linear-gradient(135deg, #FFFFFF 25%, {{ pill_color }} 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -103,9 +103,9 @@
     }
 
     .stat-glow-border {
-      border: 1.5px solid {{ theme_color }}55;
-      background: radial-gradient(circle at 50% 0%, {{ theme_color }}1F 0%, rgba(10, 16, 26, 0.95) 80%);
-      box-shadow: 0 15px 35px {{ theme_color }}22;
+      border: 1.5px solid {{ pill_color }}66;
+      background: radial-gradient(circle at 50% 0%, {{ pill_color }}22 0%, rgba(10, 16, 26, 0.95) 80%);
+      box-shadow: 0 15px 35px {{ pill_color }}22;
     }
   </style>
 </head>
@@ -185,7 +185,7 @@
     {% if stat_box %}
     <div class="stat-glow-border rounded-3xl p-7 flex items-center justify-between">
       <div class="space-y-1">
-        <div class="text-xs font-mono font-bold tracking-widest uppercase" style="color: {{ theme_color }};">
+        <div class="text-xs font-mono font-bold tracking-widest uppercase" style="color: {{ pill_color }};">
           KEY METRIC • {{ stat_box.label }}
         </div>
         {% if stat_box.subtext %}
@@ -195,7 +195,7 @@
         {% endif %}
       </div>
       <div class="text-right">
-        <div class="text-5xl font-cabinet font-black tracking-tight text-white" style="text-shadow: 0 0 25px {{ theme_color }}66;">
+        <div class="text-5xl font-cabinet font-black tracking-tight text-white" style="text-shadow: 0 0 25px {{ pill_color }}66;">
           {{ stat_box.value }}
         </div>
       </div>
@@ -228,7 +228,7 @@
     <div class="flex items-center space-x-3">
       <div class="text-lg font-syne font-black tracking-wide text-white flex items-center">
         {{ brand_handle }}
-        <svg class="w-5 h-5 ml-1.5 inline-block" style="color: {{ theme_color }};" fill="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 ml-1.5 inline-block" style="color: {{ pill_color }};" fill="currentColor" viewBox="0 0 24 24">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
         </svg>
       </div>

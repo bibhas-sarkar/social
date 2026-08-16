@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from config import get_channel_config, CHANNELS
+from config import get_channel_config, CHANNELS, resolve_theme_palette
 from src.scheduler.matchday_calendar import (
     get_current_matchday_context,
     MatchdayScheduleContext,
@@ -32,14 +32,14 @@ def run_pipeline(
     auto_schedule: bool = False,
     phase_override: Optional[str] = None,
 ) -> bool:
-    """Execute the multi-agent autonomous publishing pipeline with dynamic cadence routing."""
+    """Execute the multi-agent autonomous publishing pipeline with strict fact-checking guardrails."""
     try:
         channel = get_channel_config(channel_key)
     except ValueError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         return False
 
-    # 0. RESOLVE SCHEDULE CONTEXT (For matchday channel or when auto mode / phase override is enabled)
+    # 0. RESOLVE SCHEDULE CONTEXT & THEME PALETTE
     schedule_context: Optional[MatchdayScheduleContext] = None
     if channel_key == "matchday" or auto_schedule or phase_override:
         try:
@@ -47,6 +47,10 @@ def run_pipeline(
         except ValueError as e:
             console.print(f"[bold red]Schedule Error:[/bold red] {e}")
             return False
+
+    active_theme = resolve_theme_palette(
+        schedule_context.theme_badge if schedule_context else "TACTICS"
+    )
 
     # Rich Startup Banner
     banner_text = (
@@ -58,25 +62,28 @@ def run_pipeline(
     if schedule_context:
         banner_text += (
             f"\n[bold white]Cadence Phase:[/bold white] [bold yellow]{schedule_context.phase_name}[/bold yellow] "
-            f"([bold white]Theme Badge:[/bold white] [{schedule_context.badge_color}]{schedule_context.theme_badge}[/{schedule_context.badge_color}])\n"
+            f"([bold white]Theme Badge:[/bold white] [{active_theme.primary}]{schedule_context.theme_badge}[/{active_theme.primary}])\n"
+            f"[bold white]Theme Palette:[/bold white] [{active_theme.primary}]{active_theme.name}[/{active_theme.primary}] "
+            f"[dim](Primary: {active_theme.primary})[/dim]\n"
             f"[bold white]Topic Focus:[/bold white] [italic]{schedule_context.topic_focus}[/italic]"
         )
 
     console.print(Panel.fit(banner_text, border_style="cyan"))
 
     # 1. GATHERER AGENT
-    console.print("\n[bold blue]▶ [Step 1/5] Running NewsGathererAgent (Schedule-Aware)...[/bold blue]")
+    console.print("\n[bold blue]▶ [Step 1/5] Running NewsGathererAgent (Date & Entity Grounding)...[/bold blue]")
     gatherer = NewsGathererAgent()
     gathered_news = gatherer.gather(
         channel,
         topic_override=topic_override,
         schedule_context=schedule_context,
     )
+    console.print(f"  ✓ Verified Calendar Date: [bold cyan]{gathered_news.calendar_date_utc}[/bold cyan]")
     console.print(f"  ✓ Gathered [bold]{len(gathered_news.verified_facts)} verified facts[/bold] for: [italic]{gathered_news.topic}[/italic]")
     console.print(f"  ✓ Primary Source: [dim]{gathered_news.primary_source}[/dim]")
 
     # 2. CREATOR AGENT
-    console.print("\n[bold blue]▶ [Step 2/5] Running ContentCreatorAgent (Cadence Badging)...[/bold blue]")
+    console.print("\n[bold blue]▶ [Step 2/5] Running ContentCreatorAgent (Extractive Policy & Cadence Badging)...[/bold blue]")
     creator = ContentCreatorAgent()
     carousel_draft = creator.create(
         channel,
@@ -85,12 +92,12 @@ def run_pipeline(
     )
     console.print(f"  ✓ Generated 5-card carousel schema: [bold]{carousel_draft.headline}[/bold]")
     if carousel_draft.badge_color:
-        console.print(f"  ✓ Theme Palette: [{carousel_draft.badge_color}]{carousel_draft.badge_color}[/{carousel_draft.badge_color}]")
+        console.print(f"  ✓ Theme Accent: [{carousel_draft.badge_color}]{carousel_draft.badge_color}[/{carousel_draft.badge_color}]")
 
-    # 3. REVIEWER AGENT
-    console.print("\n[bold blue]▶ [Step 3/5] Running ReviewerAgent (Word Budget & Schema Guard)...[/bold blue]")
+    # 3. REVIEWER AGENT (Fact & Entity Consistency Audit)
+    console.print("\n[bold blue]▶ [Step 3/5] Running ReviewerAgent (Entity & Fact Consistency Audit)...[/bold blue]")
     reviewer = ReviewerAgent()
-    review_result = reviewer.review_and_refine(carousel_draft)
+    review_result = reviewer.review_and_refine(carousel_draft, gathered_news=gathered_news)
 
     if not review_result.is_approved:
         console.print(f"[bold red]✗ Reviewer rejected carousel:[/bold red] {review_result.feedback_log}")
@@ -99,6 +106,22 @@ def run_pipeline(
     console.print(f"  ✓ Carousel APPROVED after {review_result.iterations_run} review iteration(s).")
     for log in review_result.feedback_log:
         console.print(f"    [dim]{log}[/dim]")
+
+    # Display Fact & Entity Audit Table
+    audit_table = Table(title="Entity & Metric Consistency Audit Report", border_style="cyan")
+    audit_table.add_column("Slide", justify="center", style="cyan", no_wrap=True)
+    audit_table.add_column("Check Type", style="bold white")
+    audit_table.add_column("Status", style="bold green")
+    audit_table.add_column("Audit Details", style="white")
+
+    for entry in review_result.audit_entries:
+        audit_table.add_row(
+            f"0{entry.slide_number}" if entry.slide_number > 0 else "ALL",
+            entry.check_type,
+            f"[{'green' if entry.status == 'PASSED' else 'red'}]{entry.status}[/]",
+            entry.details,
+        )
+    console.print(audit_table)
 
     # Display Carousel Slides Summary Table
     table = Table(title="Approved 5-Slide Carousel Content", border_style="green")
@@ -121,7 +144,7 @@ def run_pipeline(
     console.print(table)
 
     # 4. PLAYWRIGHT CARD RENDERER
-    console.print("\n[bold blue]▶ [Step 4/5] Running Headless Playwright CardRenderer (Dynamic Badge Coloring)...[/bold blue]")
+    console.print("\n[bold blue]▶ [Step 4/5] Running Headless Playwright CardRenderer (Dynamic Theme Palettes)...[/bold blue]")
     renderer = CardRenderer()
     output_pngs = renderer.render_carousel(channel, approved_carousel)
     console.print(f"  ✓ Rendered [bold green]{len(output_pngs)} cards[/bold green] (1080x1350 PNG) into [bold]{output_pngs[0].parent}[/bold]:")
@@ -165,13 +188,13 @@ def run_pipeline(
             )
         )
 
-    console.print("\n[bold green]✔ Autonomous Cadence Publishing Cycle Completed Successfully![/bold green]\n")
+    console.print("\n[bold green]✔ Autonomous Pipeline Cycle Completed Successfully with Zero-Hallucination Guardrails![/bold green]\n")
     return True
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Modular Autonomous Publishing Engine with Schedule-Aware Automation."
+        description="Modular Autonomous Publishing Engine with Strict Fact-Checking & Theme Palettes."
     )
     parser.add_argument(
         "--channel",

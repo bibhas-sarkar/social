@@ -2,32 +2,22 @@
 
 - [x] **1. Project Setup & Environment Configuration**
   - [x] Create `requirements.txt` with required dependencies.
-  - [x] Create `.env.example` and `.env` support.
+  - [x] Create `.env.example` and `.env` support with live Perplexity and Anthropic keys.
   - [x] Set up virtual environment and install dependencies + Playwright Chromium.
 - [x] **2. Core Configuration & Multi-Channel Registry (`config.py`)**
   - [x] Define `ChannelConfig` and `CarouselContent` Pydantic models.
   - [x] Register default `matchday`, `worldnews`, `tech` channels.
-- [x] **3. HTML/CSS Visual Card Templates (`src/templates/matchday_card.html`)**
-  - [x] Design high-contrast 1080x1350 dark-mode layout.
-- [x] **4. Playwright Headless Renderer (`src/renderer/card_renderer.py`)**
-  - [x] Headless Chromium rendering HTML to 1080x1350 PNG cards.
-- [x] **5. Agent Pipeline Implementation (`src/agents/`)**
-  - [x] Perplexity Gatherer with Opta data extraction.
-  - [x] Anthropic Claude Content Creator with strict ≤30 words/slide rule.
-  - [x] Reviewer Agent with auto-refinement feedback loop.
-  - [x] Meta Graph API Social Publisher (Instagram & Facebook).
-  - [x] 24h/48h Analytics Monitor feedback loop.
-- [x] **6. Schedule-Aware Automation & Cadence Routing (`src/scheduler/`)**
-  - [x] Implement `src/scheduler/matchday_calendar.py` with schedule phases (`POST_MATCH_WRAP`, `MIDWEEK_ANALYSIS`, `FPL_PREVIEW`, `PRE_MATCH_PREVIEW`, `LIVE_MATCH_REACTION`).
-  - [x] Support dynamic resolution based on UTC/local weekday, time, and custom manual overrides.
-- [x] **7. Dynamic Context Integration in Gatherer & Creator Agents**
-  - [x] Update `src/agents/gatherer.py` to ingest `schedule_context` and tailor prompt / news extraction.
-  - [x] Update `src/agents/creator.py` to ingest `schedule_context` and produce contextual theme badges ("FPL SCOUT", "FIXTURE INTEL", "OPTA BREAKDOWN", etc.).
-- [x] **8. Dynamic Badge Colorization in Jinja2 Template**
-  - [x] Update `src/templates/matchday_card.html` with dynamic badge styles: Red (Breaking/Injuries), Emerald (FPL/Stats), Cyan (Tactics), Purple (Post-Match Debrief), Amber (Fixture Preview).
-- [x] **9. CLI Auto Mode (`main.py --auto`) & Orchestration**
-  - [x] Add `--auto` flag in `main.py` to resolve current calendar phase automatically and run full pipeline.
-- [x] **10. Verification & Master Git Push**
-  - [x] Test `--auto --dry-run` and specific phase runs.
-  - [x] Check generated PNG cards in `./dist/matchday/`.
+  - [x] Add `THEME_PALETTES` mapping (Red/Rose, Cyan/Sky, Amber/Gold, Emerald, Violet) and `resolve_theme_palette` helper.
+- [x] **3. HTML/CSS Visual Card Templates & Renderer (`matchday_card.html` & `card_renderer.py`)**
+  - [x] Design high-contrast 1080x1350 dark-mode layout with dynamic theme accents.
+  - [x] Render theme-specific badge colors, stat box glow borders, and header accent typography.
+- [x] **4. Schedule-Aware Cadence Routing (`src/scheduler/`)**
+  - [x] Dynamic phase resolution (`POST_MATCH_WRAP`, `MIDWEEK_ANALYSIS`, `FPL_PREVIEW`, `PRE_MATCH_PREVIEW`, `LIVE_MATCH_REACTION`).
+- [x] **5. Strict Fact-Checking Guardrails & Temporal Grounding**
+  - [x] **`src/agents/gatherer.py`**: Inject UTC timestamps (`2026-08-16`), active calendar status, and verified current club affiliations.
+  - [x] **`src/agents/creator.py`**: Enforce strict extractive constraints (zero parametric hallucination beyond Gatherer JSON).
+  - [x] **`src/agents/reviewer.py`**: Implement Entity & Fact Consistency Audit against Gatherer input payload.
+- [x] **6. End-to-End Verification & Master Git Push**
+  - [x] Re-run `python main.py --channel matchday --auto --dry-run`.
+  - [x] Verify factual grounding, entity consistency audit log, and theme colors.
   - [x] Update `walkthrough.md` and push all changes directly to `master`.

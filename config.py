@@ -44,6 +44,73 @@ class CarouselContent(BaseModel):
     slides: List[SlideContent] = Field(min_length=5, max_length=5)
 
 
+class ThemePalette(BaseModel):
+    """Color palette tokens for dynamic card badging and ambient gradients."""
+    name: str
+    primary: str  # Vibrant accent for badges, borders, and numbers
+    secondary: str  # Dark ambient background gradient
+    glow: str  # Ambient glow color
+    text_accent: str  # Subtext and label accent
+
+
+THEME_PALETTES: Dict[str, ThemePalette] = {
+    "breaking": ThemePalette(
+        name="Breaking / Live / Injuries",
+        primary="#F43F5E",  # Rose / Crimson
+        secondary="#2A0A12",
+        glow="rgba(244, 63, 94, 0.35)",
+        text_accent="#FDA4AF",
+    ),
+    "tactics": ThemePalette(
+        name="Tactical Breakdown / Opta",
+        primary="#00F0FF",  # Electric Cyan
+        secondary="#041C2C",
+        glow="rgba(0, 240, 255, 0.35)",
+        text_accent="#67E8F9",
+    ),
+    "fpl": ThemePalette(
+        name="FPL Scout / Differentials",
+        primary="#F59E0B",  # Vibrant Amber / Gold
+        secondary="#261600",
+        glow="rgba(245, 158, 11, 0.35)",
+        text_accent="#FDE68A",
+    ),
+    "results": ThemePalette(
+        name="Matchday Results / Debrief",
+        primary="#00FF87",  # Emerald Neon Green
+        secondary="#021D13",
+        glow="rgba(0, 255, 135, 0.35)",
+        text_accent="#A7F3D0",
+    ),
+    "marquee": ThemePalette(
+        name="Marquee / Special Edition",
+        primary="#A855F7",  # Royal Violet
+        secondary="#240738",
+        glow="rgba(168, 85, 247, 0.35)",
+        text_accent="#D8B4FE",
+    ),
+}
+
+
+def resolve_theme_palette(badge_or_category: Optional[str] = None) -> ThemePalette:
+    """Resolve theme palette tokens from badge or category name."""
+    if not badge_or_category:
+        return THEME_PALETTES["results"]
+
+    text = badge_or_category.upper().strip()
+    if any(k in text for k in ["BREAK", "INJUR", "LIVE", "HOT TAKE"]):
+        return THEME_PALETTES["breaking"]
+    elif any(k in text for k in ["TACTIC", "BLUEPRINT", "SYSTEM", "OPTA", "PASS"]):
+        return THEME_PALETTES["tactics"]
+    elif any(k in text for k in ["FPL", "SCOUT", "CAPTAIN", "DIFFERENTIAL", "ASSET"]):
+        return THEME_PALETTES["fpl"]
+    elif any(k in text for k in ["DEBRIEF", "WRAP", "AUTOPSY", "REVIEW", "STANDINGS", "RESULT"]):
+        return THEME_PALETTES["results"]
+    elif any(k in text for k in ["PREVIEW", "INTEL", "FIXTURE", "MARQUEE", "SPECIAL"]):
+        return THEME_PALETTES["marquee"]
+    return THEME_PALETTES["results"]
+
+
 class ChannelConfig(BaseModel):
     """Configuration model for an isolated content vertical."""
     key: str

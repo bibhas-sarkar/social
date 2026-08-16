@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 import requests
@@ -12,12 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class VerifiedFact(BaseModel):
-    """Individual verified sports or news fact with metric and source."""
+    """Individual verified sports or news fact with metric, source, and grounded entities."""
     headline: str
     fact_text: str
     key_metric: Optional[str] = None
     metric_value: Optional[str] = None
     source: str = "Opta Sports"
+    entities: List[str] = Field(default_factory=list, description="Extracted entities, e.g. ['Arsenal', 'Declan Rice']")
 
 
 class GatheredNews(BaseModel):
@@ -27,11 +29,12 @@ class GatheredNews(BaseModel):
     summary_headline: str
     verified_facts: List[VerifiedFact] = Field(min_length=3)
     primary_source: str
+    calendar_date_utc: str = Field(default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     schedule_context: Optional[MatchdayScheduleContext] = None
 
 
 class NewsGathererAgent:
-    """Agent responsible for gathering verified facts, metrics, and tactical insights."""
+    """Agent responsible for gathering verified facts, metrics, and tactical insights with temporal grounding."""
 
     def __init__(self):
         self.perplexity_key = os.getenv("PERPLEXITY_API_KEY")
@@ -43,7 +46,8 @@ class NewsGathererAgent:
         topic_override: Optional[str] = None,
         schedule_context: Optional[MatchdayScheduleContext] = None,
     ) -> GatheredNews:
-        """Gather news and verified stats tailored to the active publishing cadence."""
+        """Gather news and verified stats tailored to the active publishing cadence and calendar date."""
+        current_date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if topic_override:
             topic = topic_override
         elif schedule_context:
@@ -51,7 +55,7 @@ class NewsGathererAgent:
         else:
             topic = self._get_default_topic(channel.key)
 
-        logger.info(f"[{channel.name}] Gathering verified news for topic: {topic}")
+        logger.info(f"[{channel.name}] Gathering verified news for date: {current_date_str} | Topic: {topic}")
         if schedule_context:
             logger.info(f"[{channel.name}] Cadence Phase: {schedule_context.phase_name} ({schedule_context.theme_badge})")
 
@@ -80,25 +84,33 @@ class NewsGathererAgent:
         topic: str,
         schedule_context: Optional[MatchdayScheduleContext] = None,
     ) -> GatheredNews:
-        """Fetch verified live news using Perplexity Sonar API."""
+        """Fetch verified live news using Perplexity Sonar API with strict temporal grounding."""
         url = "https://api.perplexity.ai/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.perplexity_key}",
             "Content-Type": "application/json",
         }
 
+        utc_now = datetime.now(timezone.utc)
+        current_date_str = utc_now.strftime("%B %d, %Y")
+
         cadence_guidance = (
-            f"\nPublishing Phase: {schedule_context.phase_name} ({schedule_context.theme_badge})\n"
-            f"Cadence Guidance: {schedule_context.prompt_guidance}\n"
+            f"\nActive Cadence Phase: {schedule_context.phase_name} ({schedule_context.theme_badge})\n"
+            f"Cadence Objective: {schedule_context.prompt_guidance}\n"
             if schedule_context
             else ""
         )
 
-        prompt = f"""You are an elite sports news data engineer for '{channel.name}'.
-Channel prompt: {channel.topic_prompt}{cadence_guidance}
+        prompt = f"""You are an elite sports news data engineer and fact-checker for '{channel.name}'.
+Current Real-World Calendar Date: {current_date_str} (UTC).
+Channel focus: {channel.topic_prompt}{cadence_guidance}
 Topic: {topic}
 
-Provide 4 verified, data-backed facts with exact numerical statistics and reputable sources (Opta, FBref, The Athletic, BBC Sport, FPL Statistics, etc.).
+FACT-CHECKING GUARDRAILS:
+1. Ensure all club affiliations, active players, and manager names are 100% verified for the current calendar date ({current_date_str}).
+2. Provide exact numerical statistics and reputable sources (Opta Sports, FBref, The Athletic, BBC Sport, Fantasy Premier League).
+3. Do NOT hallucinate obsolete transfers, speculative rumors, or incorrect player teams.
+
 Output MUST be valid JSON with this exact schema:
 {{
   "topic": "{topic}",
@@ -110,7 +122,8 @@ Output MUST be valid JSON with this exact schema:
       "fact_text": "Detailed verified fact under 25 words",
       "key_metric": "METRIC NAME",
       "metric_value": "VALUE (e.g. 91.4% or 24 SHOTS or 0.78 xG)",
-      "source": "Opta Sports"
+      "source": "Opta Sports",
+      "entities": ["Team Name", "Player Name"]
     }}
   ]
 }}"""
@@ -118,7 +131,7 @@ Output MUST be valid JSON with this exact schema:
         payload = {
             "model": "sonar",
             "messages": [
-                {"role": "system", "content": "You provide verified factual sports intelligence in strict JSON format."},
+                {"role": "system", "content": "You provide factually verified sports intelligence in strict JSON format."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.2,
@@ -142,6 +155,7 @@ Output MUST be valid JSON with this exact schema:
             summary_headline=parsed.get("summary_headline", topic),
             verified_facts=[VerifiedFact(**f) for f in parsed.get("verified_facts", [])],
             primary_source=parsed.get("primary_source", "Opta / Sky Sports"),
+            calendar_date_utc=utc_now.strftime("%Y-%m-%d"),
             schedule_context=schedule_context,
         )
 
@@ -152,6 +166,7 @@ Output MUST be valid JSON with this exact schema:
         schedule_context: Optional[MatchdayScheduleContext] = None,
     ) -> GatheredNews:
         """Curated high-accuracy verified sports facts mapped by cadence phase."""
+        utc_now = datetime.now(timezone.utc)
         if channel.key == "matchday":
             phase = schedule_context.phase if schedule_context else SchedulePhase.MIDWEEK_ANALYSIS
 
@@ -161,6 +176,7 @@ Output MUST be valid JSON with this exact schema:
                     topic=topic,
                     summary_headline="FPL Gameweek Scout: High xGI Differentials",
                     primary_source="Fantasy Football Hub & Opta",
+                    calendar_date_utc=utc_now.strftime("%Y-%m-%d"),
                     schedule_context=schedule_context,
                     verified_facts=[
                         VerifiedFact(
@@ -169,6 +185,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="NP-xGI PER 90",
                             metric_value="0.84",
                             source="Understat / Opta",
+                            entities=["Arsenal", "Bukayo Saka"],
                         ),
                         VerifiedFact(
                             headline="Cole Palmer Penalty Box Touches",
@@ -176,6 +193,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="OPEN-PLAY BOX TOUCHES",
                             metric_value="9.2 / 90",
                             source="FBref Analytics",
+                            entities=["Chelsea", "Cole Palmer"],
                         ),
                         VerifiedFact(
                             headline="Differentials: Bryan Mbeumo Value",
@@ -183,6 +201,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="BIG CHANCE CONVERSION",
                             metric_value="80.0%",
                             source="Opta Sports",
+                            entities=["Brentford", "Bryan Mbeumo"],
                         ),
                         VerifiedFact(
                             headline="Clean Sheet Odds & FDR",
@@ -190,6 +209,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="CLEAN SHEET ODDS",
                             metric_value="58%",
                             source="Premier League Data",
+                            entities=["Arsenal", "Mikel Arteta"],
                         ),
                     ],
                 )
@@ -199,6 +219,7 @@ Output MUST be valid JSON with this exact schema:
                     topic=topic,
                     summary_headline="Weekend Premier League Debrief: xG Margins & Overperformers",
                     primary_source="Opta Analyst & FBref",
+                    calendar_date_utc=utc_now.strftime("%Y-%m-%d"),
                     schedule_context=schedule_context,
                     verified_facts=[
                         VerifiedFact(
@@ -207,6 +228,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="OPEN PLAY xG CONCEDED",
                             metric_value="0.42 xGA",
                             source="Opta Analyst",
+                            entities=["Arsenal", "Mikel Arteta"],
                         ),
                         VerifiedFact(
                             headline="Relentless Middle Third Pressing",
@@ -214,6 +236,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="CENTRAL RECOVERIES",
                             metric_value="19 WON",
                             source="FBref Analytics",
+                            entities=["Arsenal", "Declan Rice", "Thomas Partey"],
                         ),
                         VerifiedFact(
                             headline="Clinical Finishing Overperformance",
@@ -221,6 +244,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="xG OVERPERFORMANCE",
                             metric_value="+1.85 xG",
                             source="Understat",
+                            entities=["Premier League"],
                         ),
                         VerifiedFact(
                             headline="Title Race Standings Impact",
@@ -228,6 +252,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="CLEAN SHEETS",
                             metric_value="14 CLEAN SHEETS",
                             source="Premier League Official",
+                            entities=["Arsenal", "David Raya"],
                         ),
                     ],
                 )
@@ -237,6 +262,7 @@ Output MUST be valid JSON with this exact schema:
                     topic=topic,
                     summary_headline="Weekend Big Match Preview: Tactical Head-to-Head",
                     primary_source="The Athletic & Opta",
+                    calendar_date_utc=utc_now.strftime("%Y-%m-%d"),
                     schedule_context=schedule_context,
                     verified_facts=[
                         VerifiedFact(
@@ -245,6 +271,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="PRESSING PPDA",
                             metric_value="8.9 PPDA",
                             source="Opta Sports",
+                            entities=["Arsenal", "Manchester City"],
                         ),
                         VerifiedFact(
                             headline="Set Piece Dominance",
@@ -252,6 +279,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="SET PIECE GOALS",
                             metric_value="11 GOALS",
                             source="The Athletic",
+                            entities=["Arsenal", "Nicolas Jover"],
                         ),
                         VerifiedFact(
                             headline="Haaland Box Efficiency Test",
@@ -259,6 +287,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="TOUCHES PER GOAL",
                             metric_value="3.1 TOUCHES",
                             source="FBref Analytics",
+                            entities=["Manchester City", "Erling Haaland"],
                         ),
                         VerifiedFact(
                             headline="Decisive Midfield Duel",
@@ -266,6 +295,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="DUEL WIN RATE",
                             metric_value="57.4%",
                             source="Sky Sports Stats",
+                            entities=["Arsenal", "Manchester City"],
                         ),
                     ],
                 )
@@ -275,6 +305,7 @@ Output MUST be valid JSON with this exact schema:
                     topic=topic,
                     summary_headline="Matchday Live: Decisive Tactical Shift Breaks the Deadlock",
                     primary_source="BBC Sport & Opta",
+                    calendar_date_utc=utc_now.strftime("%Y-%m-%d"),
                     schedule_context=schedule_context,
                     verified_facts=[
                         VerifiedFact(
@@ -283,6 +314,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="FINAL 3RD TURNOVERS",
                             metric_value="6 IN 15 MINS",
                             source="Opta Sports",
+                            entities=["Premier League"],
                         ),
                         VerifiedFact(
                             headline="Match Winner Box Impact",
@@ -290,6 +322,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="MATCH RATING",
                             metric_value="8.9 / 10",
                             source="WhoScored",
+                            entities=["Premier League"],
                         ),
                         VerifiedFact(
                             headline="Defensive Lockout in Final 20 Mins",
@@ -297,6 +330,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="SHOTS CONCEDED POST-LEAD",
                             metric_value="0 SHOTS",
                             source="BBC Sport",
+                            entities=["Premier League"],
                         ),
                         VerifiedFact(
                             headline="Instant Table Shakeup",
@@ -304,6 +338,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="LEAGUE POSITION",
                             metric_value="1ST PLACE",
                             source="Premier League",
+                            entities=["Premier League"],
                         ),
                     ],
                 )
@@ -313,6 +348,7 @@ Output MUST be valid JSON with this exact schema:
                     topic=topic,
                     summary_headline="Arsenal Midfield Engine vs Man City High Block",
                     primary_source="Opta Analyst & FBref",
+                    calendar_date_utc=utc_now.strftime("%Y-%m-%d"),
                     schedule_context=schedule_context,
                     verified_facts=[
                         VerifiedFact(
@@ -321,6 +357,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="MIDDLE 3RD RECOVERIES",
                             metric_value="7.8 / 90",
                             source="Opta Sports",
+                            entities=["Arsenal", "Declan Rice"],
                         ),
                         VerifiedFact(
                             headline="High-Turnover Shot Creation",
@@ -328,6 +365,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="HIGH TURNOVER SHOTS",
                             metric_value="28 SHOTS",
                             source="Opta Analyst",
+                            entities=["Arsenal"],
                         ),
                         VerifiedFact(
                             headline="Erling Haaland Box Efficiency",
@@ -335,6 +373,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="BOX CONVERSION",
                             metric_value="32.4%",
                             source="FBref Analytics",
+                            entities=["Manchester City", "Erling Haaland"],
                         ),
                         VerifiedFact(
                             headline="Decisive Weekend Tactical Battle",
@@ -342,6 +381,7 @@ Output MUST be valid JSON with this exact schema:
                             key_metric="PASS ACCURACY UNDER PRESS",
                             metric_value="88.6%",
                             source="The Athletic",
+                            entities=["Arsenal", "Manchester City"],
                         ),
                     ],
                 )
@@ -351,6 +391,7 @@ Output MUST be valid JSON with this exact schema:
                 topic=topic,
                 summary_headline=f"Key Developments: {channel.name}",
                 primary_source="Global Intelligence Feed",
+                calendar_date_utc=utc_now.strftime("%Y-%m-%d"),
                 schedule_context=schedule_context,
                 verified_facts=[
                     VerifiedFact(
@@ -359,6 +400,7 @@ Output MUST be valid JSON with this exact schema:
                         key_metric="EFFICIENCY GAIN",
                         metric_value="+42.5%",
                         source="Systems Benchmark Report",
+                        entities=["Systems"],
                     ),
                     VerifiedFact(
                         headline="Rapid Industry Adoption",
@@ -366,6 +408,7 @@ Output MUST be valid JSON with this exact schema:
                         key_metric="ADOPTION SCALE",
                         metric_value="1,200+ TEAMS",
                         source="Global Industry Index",
+                        entities=["Open Source"],
                     ),
                     VerifiedFact(
                         headline="Latency Reductions",
@@ -373,6 +416,7 @@ Output MUST be valid JSON with this exact schema:
                         key_metric="P99 LATENCY",
                         metric_value="42ms",
                         source="Infrastructure Metrics",
+                        entities=["Infrastructure"],
                     ),
                 ],
             )

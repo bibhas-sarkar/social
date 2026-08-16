@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from typing import Optional, List
-from config import ChannelConfig, CarouselContent, SlideContent, StatBox
+from config import ChannelConfig, CarouselContent, SlideContent, StatBox, resolve_theme_palette
 from src.agents.gatherer import GatheredNews
 from src.scheduler.matchday_calendar import MatchdayScheduleContext, SchedulePhase
 
@@ -197,7 +197,8 @@ class ContentCreatorAgent:
         client = anthropic.Anthropic(api_key=self.anthropic_key)
 
         theme_badge = ctx.theme_badge if ctx else "BREAKING TACTICS"
-        badge_color = ctx.badge_color if ctx else channel.accent_color
+        palette = resolve_theme_palette(theme_badge)
+        badge_color = palette.primary
         phase_guidance = (
             f"Active Publishing Cadence: {ctx.phase_name}\n"
             f"Theme Badge: {ctx.theme_badge}\n"
@@ -212,8 +213,14 @@ Brand guidelines:
 - Email identity: {channel.email}
 - Tone: High-impact, tactical, authoritative, engaging.
 - Topic: {news.topic}
+- Verified Calendar Date: {news.calendar_date_utc}
 {phase_guidance}
-- Facts gathered: {news.model_dump_json()}
+- Facts gathered (GROUND TRUTH): {news.model_dump_json()}
+
+EXTRACTIVE INTEGRITY & ZERO-HALLUCINATION POLICY:
+- Base all copy strictly and solely on the verified facts, numerical statistics, and player/club entity relationships in the provided JSON.
+- Do NOT invent or swap player clubs, transfer rumors, or statistics outside the provided JSON.
+- Every claim on every slide must be 100% grounded in the input facts.
 
 Generate an ultra-engaging 5-slide social carousel JSON according to these exact guidelines:
 - Slide 1: Hook / Breaking headline (category: '{theme_badge}', no stat_box)
