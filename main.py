@@ -18,9 +18,14 @@ from src.agents.reviewer import ReviewerAgent
 from src.agents.social_publisher import MetaSocialPublisherAgent
 from src.agents.monitor import AnalyticsMonitorAgent
 from src.renderer.card_renderer import CardRenderer
+from src.scheduler.autonomous_scheduler import (
+    MatchdayAutonomousScheduler,
+    CADENCE_SLOTS,
+)
 
 # Setup logging & Rich console
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 console = Console()
 
 
@@ -31,6 +36,7 @@ def run_pipeline(
     run_monitor: bool = True,
     auto_schedule: bool = False,
     phase_override: Optional[str] = None,
+    slot_id: Optional[int] = None,
 ) -> bool:
     """Execute the multi-agent autonomous publishing pipeline with strict fact-checking guardrails."""
     try:
@@ -41,7 +47,10 @@ def run_pipeline(
 
     # 0. RESOLVE SCHEDULE CONTEXT & THEME PALETTE
     schedule_context: Optional[MatchdayScheduleContext] = None
-    if channel_key == "matchday" or auto_schedule or phase_override:
+    if slot_id:
+        scheduler = MatchdayAutonomousScheduler(channel_key)
+        schedule_context = scheduler.build_slot_context(slot_id)
+    elif channel_key == "matchday" or auto_schedule or phase_override:
         try:
             schedule_context = get_current_matchday_context(override_phase=phase_override)
         except ValueError as e:
@@ -61,57 +70,60 @@ def run_pipeline(
     )
     if schedule_context:
         banner_text += (
-            f"\n[bold white]Cadence Phase:[/bold white] [bold yellow]{schedule_context.phase_name}[/bold yellow] "
-            f"([bold white]Theme Badge:[/bold white] [{active_theme.primary}]{schedule_context.theme_badge}[/{active_theme.primary}])\n"
-            f"[bold white]Theme Palette:[/bold white] [{active_theme.primary}]{active_theme.name}[/{active_theme.primary}] "
-            f"[dim](Primary: {active_theme.primary})[/dim]\n"
+            f"\n[bold white]Cadence Phase:[/bold white] {schedule_context.phase_name} "
+            f"([bold {active_theme.primary}]Theme Badge: {schedule_context.theme_badge}[/bold {active_theme.primary}])\n"
+            f"[bold white]Theme Palette:[/bold white] {active_theme.name} ([dim]Primary: {active_theme.primary}[/dim])\n"
             f"[bold white]Topic Focus:[/bold white] [italic]{schedule_context.topic_focus}[/italic]"
         )
 
-    console.print(Panel.fit(banner_text, border_style="cyan"))
+    console.print(Panel(banner_text, border_style="cyan"))
 
-    # 1. GATHERER AGENT
+    # 1. NEWS GATHERER AGENT (With UTC Date & Entity Grounding)
     console.print("\n[bold blue]▶ [Step 1/5] Running NewsGathererAgent (Date & Entity Grounding)...[/bold blue]")
     gatherer = NewsGathererAgent()
     gathered_news = gatherer.gather(
-        channel,
+        channel=channel,
         topic_override=topic_override,
         schedule_context=schedule_context,
     )
-    console.print(f"  ✓ Verified Calendar Date: [bold cyan]{gathered_news.calendar_date_utc}[/bold cyan]")
-    console.print(f"  ✓ Gathered [bold]{len(gathered_news.verified_facts)} verified facts[/bold] for: [italic]{gathered_news.topic}[/italic]")
+    console.print(f"  ✓ Verified Calendar Date: [cyan]{gathered_news.calendar_date_utc}[/cyan]")
+    console.print(
+        f"  ✓ Gathered [bold green]{len(gathered_news.verified_facts)} verified facts[/bold green] for: [yellow]{gathered_news.summary_headline}[/yellow]"
+    )
     console.print(f"  ✓ Primary Source: [dim]{gathered_news.primary_source}[/dim]")
 
-    # 2. CREATOR AGENT
+    # 2. CONTENT CREATOR AGENT (Extractive Policy & Dynamic Badges)
     console.print("\n[bold blue]▶ [Step 2/5] Running ContentCreatorAgent (Extractive Policy & Cadence Badging)...[/bold blue]")
     creator = ContentCreatorAgent()
     carousel_draft = creator.create(
-        channel,
-        gathered_news,
+        channel=channel,
+        news=gathered_news,
         schedule_context=schedule_context,
     )
     console.print(f"  ✓ Generated 5-card carousel schema: [bold]{carousel_draft.headline}[/bold]")
-    if carousel_draft.badge_color:
-        console.print(f"  ✓ Theme Accent: [{carousel_draft.badge_color}]{carousel_draft.badge_color}[/{carousel_draft.badge_color}]")
+    console.print(f"  ✓ Theme Accent: [bold {carousel_draft.badge_color}]{carousel_draft.badge_color}[/bold {carousel_draft.badge_color}]")
 
-    # 3. REVIEWER AGENT (Fact & Entity Consistency Audit)
+    # 3. REVIEWER AGENT (Entity & Fact Consistency Audit + Smart Trimming)
     console.print("\n[bold blue]▶ [Step 3/5] Running ReviewerAgent (Entity & Fact Consistency Audit)...[/bold blue]")
     reviewer = ReviewerAgent()
-    review_result = reviewer.review_and_refine(carousel_draft, gathered_news=gathered_news)
+    review_result = reviewer.review_and_refine(
+        carousel=carousel_draft,
+        gathered_news=gathered_news,
+    )
 
     if not review_result.is_approved:
-        console.print(f"[bold red]✗ Reviewer rejected carousel:[/bold red] {review_result.feedback_log}")
+        console.print(
+            f"[bold red]✗ Reviewer rejected carousel:[/bold red] {review_result.feedback_log}"
+        )
         return False
 
-    console.print(f"  ✓ Carousel APPROVED after {review_result.iterations_run} review iteration(s).")
-    for log in review_result.feedback_log:
-        console.print(f"    [dim]{log}[/dim]")
+    console.print(f"  ✓ Carousel Approved after [bold green]{review_result.iterations_run} iteration(s)[/bold green].")
 
-    # Display Fact & Entity Audit Table
-    audit_table = Table(title="Entity & Metric Consistency Audit Report", border_style="cyan")
+    # Display Entity & Fact Audit Table
+    audit_table = Table(title="Entity, Metric & Constraint Audit Report", border_style="cyan")
     audit_table.add_column("Slide", justify="center", style="cyan", no_wrap=True)
-    audit_table.add_column("Check Type", style="bold white")
-    audit_table.add_column("Status", style="bold green")
+    audit_table.add_column("Check Type", style="bold yellow")
+    audit_table.add_column("Status", justify="center")
     audit_table.add_column("Audit Details", style="white")
 
     for entry in review_result.audit_entries:
@@ -179,22 +191,69 @@ def run_pipeline(
             Panel(
                 f"[bold]Impressions:[/bold] {report.impressions:,} | "
                 f"[bold]Reach:[/bold] {report.reach:,} | "
-                f"[bold]Engagement Rate:[/bold] {report.engagement_rate}%\n"
-                f"[bold]Saves:[/bold] {report.saves} | [bold]Shares:[/bold] {report.shares} | [bold]Likes:[/bold] {report.likes}\n"
+                f"[bold]Engagement Rate:[/bold] {report.engagement_rate:.1f}%\n"
+                f"[bold]Saves:[/bold] {report.saves} | "
+                f"[bold]Shares:[/bold] {report.shares} | "
+                f"[bold]Likes:[/bold] {report.likes} | "
+                f"[bold]Comments:[/bold] {report.comments}\n"
                 f"[bold]Verdict:[/bold] [green]{report.performance_verdict}[/green]\n"
-                f"[bold]Feedback Recommendation:[/bold] [italic]{report.feedback_recommendation}[/italic]",
+                f"[bold]Feedback Recommendation:[/bold] [yellow]{report.feedback_recommendation}[/yellow]",
                 title="24h Performance & Loop Recommendation",
-                border_style="yellow",
+                border_style="green" if report.engagement_rate > 5.0 else "yellow",
             )
         )
 
-    console.print("\n[bold green]✔ Autonomous Pipeline Cycle Completed Successfully with Zero-Hallucination Guardrails![/bold green]\n")
+    console.print(
+        "\n[bold green]✔ Autonomous Pipeline Cycle Completed Successfully with Zero-Hallucination Guardrails![/bold green]\n"
+    )
     return True
+
+
+def run_daemon_loop(channel_key: str = "matchday", dry_run: bool = False):
+    """Continuous daemon loop running 4x daily at scheduled cadence slots."""
+    scheduler = MatchdayAutonomousScheduler(channel_key)
+    console.print(f"[bold green]Starting Autonomous Matchday Daemon for {channel_key}...[/bold green]")
+    console.print("[dim]Checking schedule every 60 seconds... (Press Ctrl+C to stop)[/dim]\n")
+
+    executed_slots_today = set()
+    last_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    while True:
+        try:
+            utc_now = datetime.now(timezone.utc)
+            current_date = utc_now.strftime("%Y-%m-%d")
+            
+            # Reset daily slot execution tracking at midnight UTC
+            if current_date != last_date:
+                executed_slots_today.clear()
+                last_date = current_date
+
+            current_slot = scheduler.get_current_slot()
+            slot_id = current_slot["slot_id"]
+
+            if slot_id not in executed_slots_today:
+                console.print(f"\n[bold magenta]⚡ Triggering Scheduled Slot {slot_id}: {current_slot['name']} ({current_slot['utc_time']} UTC)[/bold magenta]")
+                success = run_pipeline(
+                    channel_key=channel_key,
+                    dry_run=dry_run,
+                    slot_id=slot_id,
+                )
+                if success:
+                    executed_slots_today.add(slot_id)
+                    console.print(f"[green]✓ Slot {slot_id} published successfully. Next slot scheduled automatically.[/green]")
+
+            time.sleep(60)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Daemon stopped by user.[/yellow]")
+            break
+        except Exception as e:
+            logger.error(f"Daemon error: {e}")
+            time.sleep(60)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Modular Autonomous Publishing Engine with Strict Fact-Checking & Theme Palettes."
+        description="Autonomous Multi-Channel Social Media Card Publishing Engine"
     )
     parser.add_argument(
         "--channel",
@@ -207,6 +266,25 @@ def main():
         action="store_true",
         default=False,
         help="Automatically resolve today's publishing cadence phase and generate matching cards.",
+    )
+    parser.add_argument(
+        "--slot",
+        type=int,
+        choices=[1, 2, 3, 4],
+        default=None,
+        help="Execute a specific daily cadence slot (1: Morning Fixture Intel, 2: Midday FPL Scout, 3: Afternoon Opta Blueprint, 4: Evening Debrief).",
+    )
+    parser.add_argument(
+        "--daemon",
+        action="store_true",
+        default=False,
+        help="Run continuously in background daemon mode executing 4x daily cadence slots.",
+    )
+    parser.add_argument(
+        "--print-cron",
+        action="store_true",
+        default=False,
+        help="Print ready-to-use Linux crontab configuration for VPS deployment.",
     )
     parser.add_argument(
         "--phase",
@@ -236,13 +314,23 @@ def main():
 
     args = parser.parse_args()
 
+    if args.print_cron:
+        scheduler = MatchdayAutonomousScheduler(args.channel)
+        print(scheduler.print_crontab_instructions())
+        sys.exit(0)
+
+    if args.daemon:
+        run_daemon_loop(channel_key=args.channel, dry_run=args.dry_run)
+        sys.exit(0)
+
     success = run_pipeline(
         channel_key=args.channel,
         dry_run=args.dry_run,
         topic_override=args.topic,
         run_monitor=not args.skip_monitor,
-        auto_schedule=args.auto,
+        auto_schedule=args.auto or (args.slot is not None),
         phase_override=args.phase,
+        slot_id=args.slot,
     )
 
     sys.exit(0 if success else 1)
