@@ -7,10 +7,11 @@ from pydantic import BaseModel, Field
 import requests
 
 from config import ChannelConfig, CarouselContent
+from src.uploader.supabase_uploader import SupabaseStorageUploader
 
 logger = logging.getLogger(__name__)
 
-GRAPH_API_VERSION = "v19.0"
+GRAPH_API_VERSION = "v26.0"
 GRAPH_BASE_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
 
@@ -27,6 +28,9 @@ class PublishResult(BaseModel):
 
 class MetaSocialPublisherAgent:
     """Agent responsible for Meta Graph API Instagram Carousel and Facebook Page publishing."""
+
+    def __init__(self):
+        self.uploader = SupabaseStorageUploader()
 
     def publish_carousel(
         self,
@@ -49,13 +53,24 @@ class MetaSocialPublisherAgent:
         fb_post_id = None
         details = {}
 
+        # Auto-upload locally rendered cards to public image host if not provided
+        hosted_urls = public_image_urls
+        if not hosted_urls and self.uploader.is_configured and channel.ig_account_id:
+            try:
+                logger.info("Uploading carousel PNG cards to Supabase Storage...")
+                hosted_urls = self.uploader.upload_carousel_images(image_paths, prefix=channel.key)
+                details["supabase_urls"] = hosted_urls
+            except Exception as e:
+                logger.error(f"Supabase upload failed: {e}")
+                details["supabase_upload_error"] = str(e)
+
         # 1. Instagram Carousel Publishing
-        if channel.ig_account_id and public_image_urls:
+        if channel.ig_account_id and hosted_urls:
             try:
                 ig_post_id = self._publish_instagram_carousel(
                     channel.ig_account_id,
                     channel.access_token,
-                    public_image_urls,
+                    hosted_urls,
                     carousel.caption,
                 )
                 details["instagram"] = {"status": "published", "media_id": ig_post_id}
