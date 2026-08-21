@@ -210,24 +210,47 @@ def run_pipeline(
     return True
 
 
+def _get_published_state_path() -> Path:
+    state_dir = Path(__file__).resolve().parent / "dist"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / "published_slots.json"
+
+
+def _load_published_slots() -> Dict[str, List[int]]:
+    state_file = _get_published_state_path()
+    if state_file.exists():
+        try:
+            with open(state_file, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_published_slot(date_str: str, slot_id: int):
+    state_file = _get_published_state_path()
+    data = _load_published_slots()
+    if date_str not in data:
+        data[date_str] = []
+    if slot_id not in data[date_str]:
+        data[date_str].append(slot_id)
+    with open(state_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+
 def run_daemon_loop(channel_key: str = "matchday", dry_run: bool = False):
-    """Continuous daemon loop running 4x daily at scheduled cadence slots."""
+    """Continuous daemon loop running 4x daily at scheduled cadence slots with persistent deduplication."""
     scheduler = MatchdayAutonomousScheduler(channel_key)
     console.print(f"[bold green]Starting Autonomous Matchday Daemon for {channel_key}...[/bold green]")
     console.print("[dim]Checking schedule every 60 seconds... (Press Ctrl+C to stop)[/dim]\n")
-
-    executed_slots_today = set()
-    last_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     while True:
         try:
             utc_now = datetime.now(timezone.utc)
             current_date = utc_now.strftime("%Y-%m-%d")
             
-            # Reset daily slot execution tracking at midnight UTC
-            if current_date != last_date:
-                executed_slots_today.clear()
-                last_date = current_date
+            published_data = _load_published_slots()
+            executed_slots_today = set(published_data.get(current_date, []))
 
             current_slot = scheduler.get_current_slot()
             slot_id = current_slot["slot_id"]
@@ -240,8 +263,10 @@ def run_daemon_loop(channel_key: str = "matchday", dry_run: bool = False):
                     slot_id=slot_id,
                 )
                 if success:
-                    executed_slots_today.add(slot_id)
-                    console.print(f"[green]✓ Slot {slot_id} published successfully. Next slot scheduled automatically.[/green]")
+                    _save_published_slot(current_date, slot_id)
+                    console.print(f"[green]✓ Slot {slot_id} published successfully and recorded to persistent state. Next slot scheduled automatically.[/green]")
+            else:
+                logger.debug(f"Slot {slot_id} already executed today ({current_date}). Standing by.")
 
             time.sleep(60)
         except KeyboardInterrupt:
