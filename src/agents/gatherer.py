@@ -148,12 +148,12 @@ class NewsGathererAgent:
 
     def _verify_via_perplexity(self, gw_name: str, fixtures_str: str) -> dict:
         url = "https://api.perplexity.ai/chat/completions"
-        prompt = f"""You are the lead Opta & FPL sports intelligence analyst.
+        prompt = f"""You are the lead Opta & Premier League sports intelligence analyst.
 Gameweek: {gw_name}
 Key Fixtures: {fixtures_str}
 
 Verify the top premium captain pick (e.g. Erling Haaland or Mohamed Salah) and top high-upside differential pick (<10% ownership, e.g. Eberechi Eze, Bryan Mbeumo, Morgan Gibbs-White, or Anthony Gordon) for Gameweek 1.
-STRICT REQUIREMENT: All player clubs must be their REAL, accurate current club (e.g. Bryan Mbeumo is Brentford, Eberechi Eze is Crystal Palace, Morgan Gibbs-White is Nottingham Forest, Anthony Gordon is Newcastle, Erling Haaland is Manchester City, Bukayo Saka is Arsenal).
+STRICT REQUIREMENT: All player clubs must be strictly accurate to confirmed squad registrations (Erling Haaland is Manchester City, Eberechi Eze is Arsenal, Bukayo Saka is Arsenal, Bryan Mbeumo is Brentford, Cole Palmer is Chelsea, Mohamed Salah is Liverpool, Anthony Gordon is Newcastle).
 
 Return JSON with exact keys:
 {{
@@ -162,7 +162,7 @@ Return JSON with exact keys:
   "captain_cost": "£15.5m",
   "captain_ownership": "72.9%",
   "diff_name": "Eze",
-  "diff_team": "Crystal Palace",
+  "diff_team": "Arsenal",
   "diff_cost": "£7.5m",
   "diff_ownership": "9.8%"
 }}"""

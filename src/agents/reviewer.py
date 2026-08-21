@@ -224,7 +224,79 @@ class ReviewerAgent:
                     )
                 )
 
-            # --- Check C: Narrative Role Compliance ---
+            # --- Check D: No Dangling References & Misleading Promises ---
+            dangling_phrases = [
+                "link in bio", "stats below", "link below", "dataset available",
+                "full squad list", "full squad stats", "breakdown below",
+                "check link", "tap link", "see bio", "swipe for more in part 2",
+                "detailed below", "attached below"
+            ]
+            found_dangling = [phrase for phrase in dangling_phrases if phrase in slide_combined]
+            if found_dangling:
+                all_passed = False
+                entries.append(
+                    AuditEntry(
+                        slide_number=slide.slide_number,
+                        check_type="DANGLING_REFERENCE_CHECK",
+                        status="FAILED",
+                        details=f"Dangling unreferenced claim found: '{', '.join(found_dangling)}' without corresponding link/data.",
+                    )
+                )
+            else:
+                entries.append(
+                    AuditEntry(
+                        slide_number=slide.slide_number,
+                        check_type="DANGLING_REFERENCE_CHECK",
+                        status="PASSED",
+                        details="No dangling links or unfulfilled claims.",
+                    )
+                )
+
+            # --- Check E: Template Placeholder Leak Audit ---
+            raw_slide_content = f"{slide.category} {slide.sub_headline} {slide.main_text} {slide.highlight_text or ''} {slide.stat_box.value if slide.stat_box else ''}"
+            if any(token in raw_slide_content for token in ["{{", "}}", "undefined", "null", "None", "{%", "%}"]):
+                all_passed = False
+                entries.append(
+                    AuditEntry(
+                        slide_number=slide.slide_number,
+                        check_type="PLACEHOLDER_LEAK_CHECK",
+                        status="FAILED",
+                        details="Unresolved template tag or raw placeholder token detected.",
+                    )
+                )
+            else:
+                entries.append(
+                    AuditEntry(
+                        slide_number=slide.slide_number,
+                        check_type="PLACEHOLDER_LEAK_CHECK",
+                        status="PASSED",
+                        details="Clean of all template placeholders.",
+                    )
+                )
+
+            # --- Check F: Sentence Completeness & Punctuation Audit ---
+            trimmed_main = slide.main_text.strip()
+            if not trimmed_main.endswith((".", "!", "?")):
+                all_passed = False
+                entries.append(
+                    AuditEntry(
+                        slide_number=slide.slide_number,
+                        check_type="SENTENCE_COMPLETION",
+                        status="FAILED",
+                        details="Slide text does not end with terminal punctuation (. ! ?).",
+                    )
+                )
+            else:
+                entries.append(
+                    AuditEntry(
+                        slide_number=slide.slide_number,
+                        check_type="SENTENCE_COMPLETION",
+                        status="PASSED",
+                        details="Slide terminates with valid punctuation.",
+                    )
+                )
+
+            # --- Check G: Narrative Role Compliance ---
             if slide.slide_number == 5:
                 if not any(q in slide_combined for q in ["?", "who", "comment", "predict", "verdict"]):
                     entries.append(
