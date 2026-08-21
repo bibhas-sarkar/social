@@ -13,6 +13,29 @@ from src.scheduler.fpl_client import FPLClient
 
 logger = logging.getLogger(__name__)
 
+# Authoritative Player-Club Registry
+VERIFIED_PLAYER_CLUBS = {
+    "Eze": "Arsenal",
+    "Eberechi Eze": "Arsenal",
+    "Haaland": "Man City",
+    "Erling Haaland": "Man City",
+    "Saka": "Arsenal",
+    "Bukayo Saka": "Arsenal",
+    "Palmer": "Chelsea",
+    "Cole Palmer": "Chelsea",
+    "Salah": "Liverpool",
+    "Mohamed Salah": "Liverpool",
+    "Gordon": "Newcastle",
+    "Anthony Gordon": "Newcastle",
+    "Gibbs-White": "Nott'm Forest",
+    "Morgan Gibbs-White": "Nott'm Forest",
+    "Mbeumo": "Brentford",
+    "Bryan Mbeumo": "Brentford",
+    "Gyökeres": "Arsenal",
+    "Gyokeres": "Arsenal",
+}
+
+
 class VerifiedFact(BaseModel):
     headline: str
     fact_text: str
@@ -20,6 +43,7 @@ class VerifiedFact(BaseModel):
     metric_value: Optional[str] = None
     source: str = "Premier League / FPL Official"
     entities: List[str] = Field(default_factory=list)
+
 
 class GatheredNews(BaseModel):
     channel_key: str
@@ -29,6 +53,7 @@ class GatheredNews(BaseModel):
     primary_source: str
     calendar_date_utc: str = Field(default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     schedule_context: Optional[MatchdayScheduleContext] = None
+
 
 class NewsGathererAgent:
     def __init__(self):
@@ -52,23 +77,27 @@ class NewsGathererAgent:
         logger.info(f"[{channel.name}] Ingested FPL API Intel for {gw_name}. Fixtures: {fixtures_str}")
 
         # 2. Use Perplexity to verify active squad status & verified differential if key present
-        cap_name, cap_team, cap_cost, cap_own = "Haaland", "Man City", "£15.0m", "68.5%"
-        diff_name, diff_team, diff_cost, diff_own = "Eze", "Crystal Palace", "£7.5m", "8.4%"
+        cap_name, cap_team, cap_cost, cap_own = "Haaland", "Man City", "£15.5m", "72.9%"
+        diff_name, diff_team, diff_cost, diff_own = "Eze", "Arsenal", "£7.5m", "9.8%"
 
         if self.perplexity_key:
             try:
                 verified_intel = self._verify_via_perplexity(gw_name, fixtures_str)
                 cap_name = verified_intel.get("captain_name", cap_name)
-                cap_team = verified_intel.get("captain_team", cap_team)
+                cap_team = VERIFIED_PLAYER_CLUBS.get(cap_name, verified_intel.get("captain_team", cap_team))
                 cap_cost = verified_intel.get("captain_cost", cap_cost)
                 cap_own = verified_intel.get("captain_ownership", cap_own)
                 diff_name = verified_intel.get("diff_name", diff_name)
-                diff_team = verified_intel.get("diff_team", diff_team)
+                diff_team = VERIFIED_PLAYER_CLUBS.get(diff_name, verified_intel.get("diff_team", diff_team))
                 diff_cost = verified_intel.get("diff_cost", diff_cost)
                 diff_own = verified_intel.get("diff_ownership", diff_own)
                 logger.info(f"Verified via Perplexity: Captain={cap_name} ({cap_team}), Diff={diff_name} ({diff_team})")
             except Exception as e:
                 logger.warning(f"Perplexity verification fallback: {e}")
+
+        # Enforce verified club mapping
+        cap_team = VERIFIED_PLAYER_CLUBS.get(cap_name, cap_team)
+        diff_team = VERIFIED_PLAYER_CLUBS.get(diff_name, diff_team)
 
         verified_facts = [
             VerifiedFact(
