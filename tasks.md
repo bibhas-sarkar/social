@@ -17,7 +17,15 @@
   - [x] **`src/agents/gatherer.py`**: Inject UTC timestamps (`2026-08-16`), active calendar status, and verified current club affiliations.
   - [x] **`src/agents/creator.py`**: Enforce strict extractive constraints (zero parametric hallucination beyond Gatherer JSON).
   - [x] **`src/agents/reviewer.py`**: Implement Entity & Fact Consistency Audit against Gatherer input payload.
-- [x] **6. End-to-End Verification & Master Git Push**
-  - [x] Re-run `python main.py --channel matchday --auto --dry-run`.
+- [x] **6. Supabase Storage & Public Image Hosting**
+  - [x] Create `src/uploader/supabase_uploader.py` for automated high-res card hosting.
+  - [x] Integrate with `src/agents/social_publisher.py` for automated Instagram Carousel image URL resolution.
+  - [x] Verify live upload & public reachability (`200 OK`) on bucket `social-cards`.
+- [x] **7. Meta Graph API Verification (Instagram & Facebook)**
+  - [x] Verified Facebook Page connection: `Matchday EPL.` (`1275826832280259`).
+  - [x] Verified Instagram Business Account connection: `@matchdayepl` (`17841437509827446`).
+  - [x] Verified live container polling & multi-card publishing workflow.
+- [x] **8. End-to-End Verification & Master Git Push**
+  - [x] Re-run `python main.py --channel matchday --auto --dry-run` and live connection test.
   - [x] Verify factual grounding, entity consistency audit log, and theme colors.
   - [x] Update `walkthrough.md` and push all changes directly to `master`.
