@@ -2,6 +2,7 @@ import argparse
 import sys
 import logging
 from typing import Optional
+from datetime import datetime, timezone
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
