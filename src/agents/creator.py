@@ -24,7 +24,7 @@ class ContentCreatorAgent:
         palette = resolve_theme_palette(theme_badge)
         badge_color = palette.primary
 
-        # Slide 1: Hook (Season Return & GW1 Countdown)
+        # Slide 1: Hook & Topic Overview
         slide1 = SlideContent(
             slide_number=1,
             total_slides=5,
@@ -32,6 +32,11 @@ class ContentCreatorAgent:
             category_color=badge_color,
             sub_headline="PREMIER LEAGUE RETURNS",
             main_text="The 2026/27 season is here. Marquee fixtures, transfer impacts, and crucial FPL captaincy decisions await.",
+            stat_box=StatBox(
+                label="CAMPAIGN OPENER",
+                value="GW 1",
+                subtext="2026/27 Premier League",
+            ),
             highlight_text="SEASON LAUNCH",
             source_attribution="Premier League",
             brand_handle=channel.brand_handle,
