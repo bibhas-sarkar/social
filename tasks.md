@@ -1,31 +1,28 @@
-# Autonomous Publishing Engine - Task Checklist
+# Project Roadmap & Implementation Tasks
 
-- [x] **1. Project Setup & Environment Configuration**
-  - [x] Create `requirements.txt` with required dependencies.
-  - [x] Create `.env.example` and `.env` support with live Perplexity and Anthropic keys.
-  - [x] Set up virtual environment and install dependencies + Playwright Chromium.
-- [x] **2. Core Configuration & Multi-Channel Registry (`config.py`)**
+- [x] **1. Setup & Environment Configuration**
+  - [x] Configure `.env` with Gemini API keys, Meta Graph API tokens, Instagram Account ID (`17841437509827446`), and Supabase storage.
+  - [x] Set up Python virtual environment and install Playwright + headless Chromium.
+- [x] **2. Multi-Channel Schema & Brand Identifiers**
   - [x] Define `ChannelConfig` and `CarouselContent` Pydantic models.
   - [x] Register default `matchday`, `worldnews`, `tech` channels.
   - [x] Add `THEME_PALETTES` mapping (Red/Rose, Cyan/Sky, Amber/Gold, Emerald, Violet) and `resolve_theme_palette` helper.
 - [x] **3. HTML/CSS Visual Card Templates & Renderer (`matchday_card.html` & `card_renderer.py`)**
   - [x] Design high-contrast 1080x1350 dark-mode layout with dynamic theme accents.
   - [x] Render theme-specific badge colors, stat box glow borders, and header accent typography.
+  - [x] Redesign card template (`src/templates/matchday_card.html`) with bold 64px display typography and full-canvas vertical balance.
 - [x] **4. Schedule-Aware Cadence Routing (`src/scheduler/`)**
   - [x] Dynamic phase resolution (`POST_MATCH_WRAP`, `MIDWEEK_ANALYSIS`, `FPL_PREVIEW`, `PRE_MATCH_PREVIEW`, `LIVE_MATCH_REACTION`).
+  - [x] 4x daily automated schedule engine (`autonomous_scheduler.py`).
 - [x] **5. Strict Fact-Checking Guardrails & Temporal Grounding**
   - [x] **`src/agents/gatherer.py`**: Inject UTC timestamps (`2026-08-16`), active calendar status, and verified current club affiliations.
-  - [x] **`src/agents/creator.py`**: Enforce strict extractive constraints (zero parametric hallucination beyond Gatherer JSON).
-  - [x] **`src/agents/reviewer.py`**: Implement Entity & Fact Consistency Audit against Gatherer input payload.
-- [x] **6. Supabase Storage & Public Image Hosting**
-  - [x] Create `src/uploader/supabase_uploader.py` for automated high-res card hosting.
-  - [x] Integrate with `src/agents/social_publisher.py` for automated Instagram Carousel image URL resolution.
-  - [x] Verify live upload & public reachability (`200 OK`) on bucket `social-cards`.
-- [x] **7. Meta Graph API Verification (Instagram & Facebook)**
-  - [x] Verified Facebook Page connection: `Matchday EPL.` (`1275826832280259`).
-  - [x] Verified Instagram Business Account connection: `@matchdayepl` (`17841437509827446`).
-  - [x] Verified live container polling & multi-card publishing workflow.
-- [x] **8. End-to-End Verification & Master Git Push**
-  - [x] Re-run `python main.py --channel matchday --auto --dry-run` and live connection test.
-  - [x] Verify factual grounding, entity consistency audit log, and theme colors.
-  - [x] Update `walkthrough.md` and push all changes directly to `master`.
+  - [x] **`src/agents/creator.py`**: Enforce 5-slide narrative arc, 30 words max per slide, strict uppercase formatting, and zero markdown symbols.
+  - [x] **`src/agents/reviewer.py`**: Multi-pass automated grading (word count, temporal validation, squad affiliation checks).
+  - [x] **`src/scheduler/pl_squad_validator.py`**: Authoritative Premier League registry confirming squad allocations (e.g., Eze $\rightarrow$ Arsenal).
+- [x] **6. Cloud Storage & Meta Instagram Publishing**
+  - [x] Supabase Storage bucket integration (`social-cards`).
+  - [x] Instagram 5-image container creation and carousel publishing.
+  - [x] Delete older test posts and publish clean newly formatted Gameweek 1 post live.
+- [x] **7. 24/7 VPS Deployment & Automation**
+  - [x] Automated deployment script (`deploy.sh`) connecting to `root@147.93.168.134`.
+  - [x] Configured `matchday-social.service` systemd daemon for autonomous 4x daily publishing.
