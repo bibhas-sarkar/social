@@ -203,16 +203,34 @@ class MetaSocialPublisherAgent:
             time.sleep(2)
         raise TimeoutError(f"Instagram container {container_id} timed out before finishing.")
 
+    def _get_page_access_token(self, page_id: str, user_access_token: str) -> str:
+        """Fetch Page Access Token for direct Facebook Page wall posting."""
+        try:
+            res = requests.get(
+                f"{GRAPH_BASE_URL}/me/accounts",
+                params={"fields": "id,access_token", "access_token": user_access_token},
+                timeout=15,
+            )
+            if res.status_code == 200:
+                pages = res.json().get("data", [])
+                for p in pages:
+                    if str(p.get("id")) == str(page_id):
+                        return p.get("access_token") or user_access_token
+        except Exception as e:
+            logger.warning(f"Could not resolve page token: {e}")
+        return user_access_token
+
     def _publish_facebook_photos(
         self, page_id: str, access_token: str, image_paths: List[Path], message: str
     ) -> str:
         """Upload unpublished images and create multi-photo Facebook feed post."""
+        page_token = self._get_page_access_token(page_id, access_token)
         photo_ids = []
         for p in image_paths:
             with open(p, "rb") as f:
                 res = requests.post(
                     f"{GRAPH_BASE_URL}/{page_id}/photos",
-                    data={"published": "false", "access_token": access_token},
+                    data={"published": "false", "access_token": page_token},
                     files={"source": f},
                     timeout=45,
                 )
@@ -226,7 +244,7 @@ class MetaSocialPublisherAgent:
             data={
                 "message": message,
                 "attached_media": json.dumps(attached_media),
-                "access_token": access_token,
+                "access_token": page_token,
             },
             timeout=30,
         )
