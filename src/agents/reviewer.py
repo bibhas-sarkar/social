@@ -4,17 +4,18 @@ from typing import List, Tuple, Optional, Set
 from pydantic import BaseModel, Field
 from config import CarouselContent, SlideContent
 from src.agents.gatherer import GatheredNews
+from src.scheduler.pl_squad_validator import PLSquadValidator
 
 logger = logging.getLogger(__name__)
 
-MAX_WORDS_PER_SLIDE = 30
 MAX_REVIEW_ITERATIONS = 3
+MAX_WORDS_PER_SLIDE = 30
 
 
 class AuditEntry(BaseModel):
     """Individual entity, metric, and schema audit check entry."""
     slide_number: int
-    check_type: str  # 'ENTITY_CHECK', 'METRIC_VERIFICATION', 'WORD_COUNT', 'NARRATIVE_CHECK'
+    check_type: str  # 'ENTITY_CHECK', 'METRIC_VERIFICATION', 'SQUAD_AFFILIATION_CHECK', 'WORD_COUNT', 'NARRATIVE_CHECK'
     status: str      # 'PASSED', 'WARNING', 'FAILED'
     details: str
 
@@ -30,7 +31,10 @@ class ReviewResult(BaseModel):
 
 
 class ReviewerAgent:
-    """Rigorous quality auditor validating word counts, entity grounding, and metric accuracy."""
+    """Rigorous quality auditor validating word counts, entity grounding, squad affiliations, and metric accuracy."""
+
+    def __init__(self):
+        self.squad_validator = PLSquadValidator()
 
     def review_and_refine(
         self,
@@ -174,7 +178,31 @@ class ReviewerAgent:
                         )
                     )
 
-            # --- Check B: Word Count ---
+            # --- Check B: Premier League Official Squad & Club Verification ---
+            slide_raw = f"{slide.sub_headline} {slide.main_text}"
+            squad_validations = self.squad_validator.validate_slide_text(slide_raw)
+            for is_valid, squad_detail in squad_validations:
+                if not is_valid:
+                    all_passed = False
+                    entries.append(
+                        AuditEntry(
+                            slide_number=slide.slide_number,
+                            check_type="SQUAD_AFFILIATION_CHECK",
+                            status="FAILED",
+                            details=squad_detail,
+                        )
+                    )
+                else:
+                    entries.append(
+                        AuditEntry(
+                            slide_number=slide.slide_number,
+                            check_type="SQUAD_AFFILIATION_CHECK",
+                            status="PASSED",
+                            details=squad_detail,
+                        )
+                    )
+
+            # --- Check C: Word Count ---
             w_count = len(slide.main_text.strip().split())
             if w_count <= MAX_WORDS_PER_SLIDE:
                 entries.append(
