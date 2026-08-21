@@ -123,19 +123,19 @@ class NewsGathererAgent:
 Gameweek: {gw_name}
 Key Fixtures: {fixtures_str}
 
-Verify the top premium captain pick (e.g. Erling Haaland or Mohamed Salah) and top high-upside differential pick (<10% ownership, e.g. Eberechi Eze, Bryan Mbeumo, or Morgan Gibbs-White) for Gameweek 1.
-Ensure all club affiliations are 100% verified for the current season.
+Verify the top premium captain pick (e.g. Erling Haaland or Mohamed Salah) and top high-upside differential pick (<10% ownership, e.g. Eberechi Eze, Bryan Mbeumo, Morgan Gibbs-White, or Anthony Gordon) for Gameweek 1.
+STRICT REQUIREMENT: All player clubs must be their REAL, accurate current club (e.g. Bryan Mbeumo is Brentford, Eberechi Eze is Crystal Palace, Morgan Gibbs-White is Nottingham Forest, Anthony Gordon is Newcastle, Erling Haaland is Manchester City, Bukayo Saka is Arsenal).
 
 Return JSON with exact keys:
 {{
   "captain_name": "Haaland",
   "captain_team": "Man City",
-  "captain_cost": "£15.0m",
-  "captain_ownership": "68.5%",
+  "captain_cost": "£15.5m",
+  "captain_ownership": "72.9%",
   "diff_name": "Eze",
   "diff_team": "Crystal Palace",
   "diff_cost": "£7.5m",
-  "diff_ownership": "8.4%"
+  "diff_ownership": "9.8%"
 }}"""
         headers = {"Authorization": f"Bearer {self.perplexity_key}", "Content-Type": "application/json"}
         payload = {
