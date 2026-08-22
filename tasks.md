@@ -26,3 +26,9 @@
 - [x] **7. 24/7 VPS Deployment & Automation**
   - [x] Automated deployment script (`deploy.sh`) connecting to `root@147.93.168.134`.
   - [x] Configured `matchday-social.service` systemd daemon for autonomous 4x daily publishing.
+- [x] **8. Matchday Debrief, Injury Alerts & FPL Transfer Lookout Expansion**
+  - [x] **FPL Client Upgrades (`src/scheduler/fpl_client.py`)**: Added real match results, top 3 BPS points haulers, injury news, and transfer price rise/fall trends.
+  - [x] **Multi-Format Content Creator (`src/agents/creator.py`)**: Built specialized generation for `POST_MATCH_DEBRIEF`, `INJURY_INTEL`, `TRANSFER_RADAR`, and `FPL_SCOUT`.
+  - [x] **Viral Growth & Engagement Engine**: Added high-converting captions, dynamic hashtag clouds, and interactive debate hooks to drive algorithmic reach and followers.
+  - [x] **Autonomous Cadence Routing**: Integrated 4 daily specialized slots in `autonomous_scheduler.py` and `matchday_calendar.py`.
+  - [x] **Deployment & Live Testing**: Tested all 4 formats locally and deployed to VPS daemon (`147.93.168.134`).
