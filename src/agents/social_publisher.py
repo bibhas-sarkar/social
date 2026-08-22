@@ -138,8 +138,9 @@ class MetaSocialPublisherAgent:
         logger.info("Creating Instagram carousel item containers...")
         item_container_ids = []
 
-        # Step 1: Create individual item containers
-        for url in image_urls:
+        # Step 1: Create individual item containers with gentle humanized pacing
+        for idx, url in enumerate(image_urls, start=1):
+            logger.info(f"Creating container for slide {idx}/{len(image_urls)}...")
             res = requests.post(
                 f"{GRAPH_BASE_URL}/{ig_user_id}/media",
                 data={
@@ -151,6 +152,12 @@ class MetaSocialPublisherAgent:
             )
             res.raise_for_status()
             item_container_ids.append(res.json()["id"])
+            # Gentle 3.5s pause to prevent rapid API burst spikes
+            if idx < len(image_urls):
+                time.sleep(3.5)
+
+        # Gentle pause before creating the parent carousel container
+        time.sleep(4.0)
 
         # Step 2: Create main carousel container
         logger.info("Creating main Instagram carousel container...")
@@ -167,9 +174,12 @@ class MetaSocialPublisherAgent:
         res.raise_for_status()
         carousel_container_id = res.json()["id"]
 
-        # Step 3: Poll status until FINISHED
+        # Step 3: Poll status until FINISHED with gentle backoff
         logger.info(f"Polling container status {carousel_container_id}...")
         self._wait_for_container_ready(carousel_container_id, access_token)
+
+        # Gentle pause before publishing
+        time.sleep(3.0)
 
         # Step 4: Publish carousel
         logger.info(f"Publishing container {carousel_container_id}...")
@@ -185,10 +195,11 @@ class MetaSocialPublisherAgent:
         return pub_res.json()["id"]
 
     def _wait_for_container_ready(
-        self, container_id: str, access_token: str, max_retries: int = 10
+        self, container_id: str, access_token: str, max_retries: int = 12
     ):
-        """Poll container status until ready for publishing."""
-        for _ in range(max_retries):
+        """Poll container status until ready for publishing with gentle 5-second intervals."""
+        for attempt in range(1, max_retries + 1):
+            time.sleep(5.0)
             res = requests.get(
                 f"{GRAPH_BASE_URL}/{container_id}",
                 params={"fields": "status_code", "access_token": access_token},
@@ -197,10 +208,9 @@ class MetaSocialPublisherAgent:
             if res.status_code == 200:
                 status = res.json().get("status_code")
                 if status == "FINISHED":
+                    logger.info(f"Container {container_id} is FINISHED (ready to publish).")
                     return
-                elif status == "ERROR":
-                    raise RuntimeError(f"Instagram media container {container_id} failed processing.")
-            time.sleep(2)
+            logger.debug(f"Container {container_id} status: {res.text} (attempt {attempt}/{max_retries})")
         raise TimeoutError(f"Instagram container {container_id} timed out before finishing.")
 
     def _get_page_access_token(self, page_id: str, user_access_token: str) -> str:

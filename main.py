@@ -213,13 +213,20 @@ def run_pipeline(
     return True
 
 
+# Account Warmup Safeguards (Anti-Spam Flags Prevention)
+WARMUP_MODE = True
+WARMUP_MAX_POSTS_PER_DAY = 2
+MIN_COOLDOWN_SECONDS = 4 * 3600  # 4 hours minimum between posts
+WARMUP_ALLOWED_SLOTS = [2, 4]  # Midday FPL Scout & Evening Match Debrief
+
+
 def _get_published_state_path() -> Path:
     state_dir = Path(__file__).resolve().parent / "dist"
     state_dir.mkdir(parents=True, exist_ok=True)
     return state_dir / "published_slots.json"
 
 
-def _load_published_slots() -> Dict[str, List[int]]:
+def _load_published_state() -> Dict[str, Any]:
     state_file = _get_published_state_path()
     if state_file.exists():
         try:
@@ -230,21 +237,25 @@ def _load_published_slots() -> Dict[str, List[int]]:
     return {}
 
 
-def _save_published_slot(date_str: str, slot_id: int):
+def _save_published_state(date_str: str, slot_id: int):
     state_file = _get_published_state_path()
-    data = _load_published_slots()
-    if date_str not in data:
-        data[date_str] = []
-    if slot_id not in data[date_str]:
-        data[date_str].append(slot_id)
+    data = _load_published_state()
+    if "slots_by_date" not in data:
+        data["slots_by_date"] = {}
+    if date_str not in data["slots_by_date"]:
+        data["slots_by_date"][date_str] = []
+    if slot_id not in data["slots_by_date"][date_str]:
+        data["slots_by_date"][date_str].append(slot_id)
+    data["last_published_timestamp"] = time.time()
     with open(state_file, "w") as f:
         json.dump(data, f, indent=2)
 
 
 def run_daemon_loop(channel_key: str = "matchday", dry_run: bool = False):
-    """Continuous daemon loop running 4x daily at scheduled cadence slots with persistent deduplication."""
+    """Continuous daemon loop with account warmup rate limits, 4h cooldown, and anti-spam protection."""
     scheduler = MatchdayAutonomousScheduler(channel_key)
     console.print(f"[bold green]Starting Autonomous Matchday Daemon for {channel_key}...[/bold green]")
+    console.print(f"[bold yellow]🛡️ Account Warmup Safeguards Active: Max {WARMUP_MAX_POSTS_PER_DAY} posts/day, Min 4h cooldown between posts.[/bold yellow]")
     console.print("[dim]Checking schedule every 60 seconds... (Press Ctrl+C to stop)[/dim]\n")
 
     while True:
@@ -252,13 +263,23 @@ def run_daemon_loop(channel_key: str = "matchday", dry_run: bool = False):
             utc_now = datetime.now(timezone.utc)
             current_date = utc_now.strftime("%Y-%m-%d")
             
-            published_data = _load_published_slots()
-            executed_slots_today = set(published_data.get(current_date, []))
+            state_data = _load_published_state()
+            executed_slots_today = set(state_data.get("slots_by_date", {}).get(current_date, []))
+            last_pub_ts = state_data.get("last_published_timestamp", 0)
+            seconds_since_last_pub = time.time() - last_pub_ts
 
             current_slot = scheduler.get_current_slot()
             slot_id = current_slot["slot_id"]
 
-            if slot_id not in executed_slots_today:
+            # Warmup filter: Only run allowed warmup slots and max 2/day
+            if WARMUP_MODE and slot_id not in WARMUP_ALLOWED_SLOTS:
+                logger.debug(f"[Warmup Guard] Slot {slot_id} skipped in warmup mode. Waiting for Midday/Evening slot.")
+            elif len(executed_slots_today) >= WARMUP_MAX_POSTS_PER_DAY:
+                logger.debug(f"[Warmup Guard] Daily post limit ({WARMUP_MAX_POSTS_PER_DAY}) reached for today ({current_date}).")
+            elif seconds_since_last_pub < MIN_COOLDOWN_SECONDS and not dry_run:
+                remaining_cooldown = int((MIN_COOLDOWN_SECONDS - seconds_since_last_pub) / 60)
+                logger.debug(f"[Cooldown Guard] Cooldown active. {remaining_cooldown} minutes remaining before next post.")
+            elif slot_id not in executed_slots_today:
                 console.print(f"\n[bold magenta]⚡ Triggering Scheduled Slot {slot_id}: {current_slot['name']} ({current_slot['utc_time']} UTC)[/bold magenta]")
                 success = run_pipeline(
                     channel_key=channel_key,
@@ -266,7 +287,7 @@ def run_daemon_loop(channel_key: str = "matchday", dry_run: bool = False):
                     slot_id=slot_id,
                 )
                 if success:
-                    _save_published_slot(current_date, slot_id)
+                    _save_published_state(current_date, slot_id)
                     console.print(f"[green]✓ Slot {slot_id} published successfully and recorded to persistent state. Next slot scheduled automatically.[/green]")
             else:
                 logger.debug(f"Slot {slot_id} already executed today ({current_date}). Standing by.")

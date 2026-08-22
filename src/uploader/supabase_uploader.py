@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 from pathlib import Path
 from typing import List, Optional
@@ -58,10 +59,11 @@ class SupabaseStorageUploader:
         return public_url
 
     def upload_carousel_images(self, image_paths: List[Path], prefix: str = "matchday") -> List[str]:
-        """Upload a list of carousel images and return list of public URLs."""
-        public_urls = []
-        for i, img_path in enumerate(image_paths, start=1):
-            remote_name = f"{prefix}_slide_{i}_{img_path.name}"
-            url = self.upload_file(img_path, remote_filename=remote_name)
-            public_urls.append(url)
-        return public_urls
+        """Upload all carousel PNG cards and return list of public HTTPS URLs with unique timestamps."""
+        urls = []
+        batch_ts = int(time.time())
+        for idx, p in enumerate(image_paths, start=1):
+            remote_name = f"{prefix}_{batch_ts}_slide_{idx}_{p.name}"
+            public_url = self.upload_file(p, remote_filename=remote_name)
+            urls.append(public_url)
+        return urls
