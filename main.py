@@ -4,7 +4,7 @@ import json
 import time
 import logging
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from datetime import datetime, timezone
 from rich.console import Console
 from rich.panel import Panel
