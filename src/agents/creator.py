@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class ContentCreatorAgent:
-    """Structures official FPL & PL intelligence into high-converting 5-card carousel decks."""
+    """Structures official FPL & PL intelligence into high-converting 6-card carousel decks with dedicated Follow & Like outro."""
 
     def create(
         self,
@@ -30,6 +30,31 @@ class ContentCreatorAgent:
         else:
             return self._create_fpl_scout(channel, news, extra.get("data", {}))
 
+    def _build_outro_slide(
+        self,
+        slide_number: int,
+        total_slides: int,
+        channel: ChannelConfig,
+        theme_badge: str,
+        badge_color: str,
+    ) -> SlideContent:
+        return SlideContent(
+            slide_number=slide_number,
+            total_slides=total_slides,
+            category="JOIN THE SQUAD",
+            category_color=badge_color,
+            sub_headline="NEVER MISS A MATCHDAY UPDATE",
+            main_text=f"Follow {channel.brand_handle} for daily Premier League tactics, FPL price risers, top point haulers & injury intel. Like & save this post for your gameweek!",
+            stat_box=StatBox(
+                label="DAILY EPL INTEL",
+                value="FOLLOW",
+                subtext="Like • Comment • Save • Share",
+            ),
+            highlight_text=f"FOLLOW {channel.brand_handle.upper()}",
+            source_attribution=channel.brand_handle,
+            brand_handle=channel.brand_handle,
+        )
+
     def _create_match_debrief(
         self,
         channel: ChannelConfig,
@@ -39,6 +64,7 @@ class ContentCreatorAgent:
         theme_badge = "MATCH DEBRIEF"
         palette = resolve_theme_palette(theme_badge)
         badge_color = palette.primary
+        total_slides = 6
 
         scoreline = debrief.get("scoreline", "Arsenal 3 - 0 Coventry City")
         h_team = debrief.get("home_team", "Arsenal")
@@ -52,7 +78,7 @@ class ContentCreatorAgent:
 
         slide1 = SlideContent(
             slide_number=1,
-            total_slides=5,
+            total_slides=total_slides,
             category=theme_badge,
             category_color=badge_color,
             sub_headline=f"FULL-TIME: {scoreline.upper()}",
@@ -69,7 +95,7 @@ class ContentCreatorAgent:
 
         slide2 = SlideContent(
             slide_number=2,
-            total_slides=5,
+            total_slides=total_slides,
             category="TOP FPL HAULER",
             category_color=badge_color,
             sub_headline=f"1ST PLACE: {p1['name'].upper()} ({p1['team'].upper()})",
@@ -86,7 +112,7 @@ class ContentCreatorAgent:
 
         slide3 = SlideContent(
             slide_number=3,
-            total_slides=5,
+            total_slides=total_slides,
             category="BONUS PODIUM",
             category_color=badge_color,
             sub_headline=f"PODIUM: {p2['name'].upper()} & {p3['name'].upper()}",
@@ -103,7 +129,7 @@ class ContentCreatorAgent:
 
         slide4 = SlideContent(
             slide_number=4,
-            total_slides=5,
+            total_slides=total_slides,
             category="TRANSFER LOOKOUT",
             category_color=badge_color,
             sub_headline="IMMEDIATE TRANSFER TARGETS",
@@ -120,7 +146,7 @@ class ContentCreatorAgent:
 
         slide5 = SlideContent(
             slide_number=5,
-            total_slides=5,
+            total_slides=total_slides,
             category="FAN VERDICT",
             category_color=badge_color,
             sub_headline="WHO WAS MAN OF THE MATCH?",
@@ -130,6 +156,8 @@ class ContentCreatorAgent:
             brand_handle=channel.brand_handle,
         )
 
+        slide6 = self._build_outro_slide(6, total_slides, channel, theme_badge, badge_color)
+
         caption = (
             f"🚨 [{theme_badge}] {scoreline}: Full-Time Debrief & Top FPL Points Stars\n\n"
             f"Dominant performance from {h_team}! Swipe through for the Top 3 FPL points haulers, bonus breakdown, and immediate transfer recommendations.\n\n"
@@ -137,7 +165,8 @@ class ContentCreatorAgent:
             f"1️⃣ {p1['name']} ({p1['team']}) - {p1['points']} pts ({p1['cost']})\n"
             f"2️⃣ {p2['name']} ({p2['team']}) - {p2['points']} pts ({p2['cost']})\n"
             f"3️⃣ {p3['name']} ({p3['team']}) - {p3['points']} pts ({p3['cost']})\n\n"
-            f"👇 Who was your Player of the Match? Drop your ratings below!\n\n"
+            f"👉 Follow @MatchdayEPL for daily Premier League tactics & FPL alerts!\n"
+            f"❤️ Like & Save this post if you enjoyed the debrief!\n\n"
             f"#PremierLeague #FPL #FPLCommunity #MatchdayEPL #FantasyPL #Arsenal #EPL"
         )
 
@@ -148,7 +177,7 @@ class ContentCreatorAgent:
             caption=caption,
             badge_color=badge_color,
             hashtags=["#PremierLeague", "#FPL", "#FPLCommunity", "#MatchdayEPL", "#FantasyPL"],
-            slides=[slide1, slide2, slide3, slide4, slide5],
+            slides=[slide1, slide2, slide3, slide4, slide5, slide6],
         )
 
     def _create_injury_intel(
@@ -160,6 +189,7 @@ class ContentCreatorAgent:
         theme_badge = "INJURY INTEL"
         palette = resolve_theme_palette(theme_badge)
         badge_color = palette.primary
+        total_slides = 6
 
         player = inj.get("player_name", "Pedro Porro")
         team = inj.get("team", "Spurs")
@@ -172,7 +202,7 @@ class ContentCreatorAgent:
 
         slide1 = SlideContent(
             slide_number=1,
-            total_slides=5,
+            total_slides=total_slides,
             category=theme_badge,
             category_color=badge_color,
             sub_headline=f"INJURY ALERT: {player.upper()} ({team.upper()})",
@@ -189,7 +219,7 @@ class ContentCreatorAgent:
 
         slide2 = SlideContent(
             slide_number=2,
-            total_slides=5,
+            total_slides=total_slides,
             category="MEDICAL TIMELINE",
             category_color=badge_color,
             sub_headline="RECOVERY & RETURN DATE",
@@ -206,7 +236,7 @@ class ContentCreatorAgent:
 
         slide3 = SlideContent(
             slide_number=3,
-            total_slides=5,
+            total_slides=total_slides,
             category="PRIMARY REPLACEMENT",
             category_color=badge_color,
             sub_headline=f"TOP BUY: {rep1['name'].upper()} ({rep1['team'].upper()})",
@@ -223,7 +253,7 @@ class ContentCreatorAgent:
 
         slide4 = SlideContent(
             slide_number=4,
-            total_slides=5,
+            total_slides=total_slides,
             category="BUDGET ENABLER",
             category_color=badge_color,
             sub_headline=f"VALUE PICK: {rep2['name'].upper()} ({rep2['team'].upper()})",
@@ -240,7 +270,7 @@ class ContentCreatorAgent:
 
         slide5 = SlideContent(
             slide_number=5,
-            total_slides=5,
+            total_slides=total_slides,
             category="COMMUNITY POLL",
             category_color=badge_color,
             sub_headline="ARE YOU SELLING OR HOLDING?",
@@ -250,13 +280,16 @@ class ContentCreatorAgent:
             brand_handle=channel.brand_handle,
         )
 
+        slide6 = self._build_outro_slide(6, total_slides, channel, theme_badge, badge_color)
+
         caption = (
             f"🚨 [{theme_badge}] {player} ({team}) Sidelined: Top FPL Direct Replacements\n\n"
             f"{player} ({cost}, {own} owned) is confirmed out: {news_text}.\n\n"
             f"🔄 Top Replacement Options:\n"
             f"1️⃣ {rep1['name']} ({rep1['team']}) - {rep1['cost']} ({rep1['ownership']} owned)\n"
             f"2️⃣ {rep2['name']} ({rep2['team']}) - {rep2['cost']} ({rep2['ownership']} owned)\n\n"
-            f"👇 Are you selling immediately or benching? Comment your move below!\n\n"
+            f"👉 Follow @MatchdayEPL for daily Premier League injury updates & FPL tactics!\n"
+            f"❤️ Like & Save this post for your Gameweek planning!\n\n"
             f"#FPL #FPLInjuries #PremierLeague #FPLCommunity #FPLTips #MatchdayEPL"
         )
 
@@ -267,7 +300,7 @@ class ContentCreatorAgent:
             caption=caption,
             badge_color=badge_color,
             hashtags=["#FPL", "#FPLInjuries", "#PremierLeague", "#FPLCommunity", "#MatchdayEPL"],
-            slides=[slide1, slide2, slide3, slide4, slide5],
+            slides=[slide1, slide2, slide3, slide4, slide5, slide6],
         )
 
     def _create_transfer_radar(
@@ -279,6 +312,7 @@ class ContentCreatorAgent:
         theme_badge = "TRANSFER RADAR"
         palette = resolve_theme_palette(theme_badge)
         badge_color = palette.primary
+        total_slides = 6
 
         top_buys = radar.get("top_buys", [])
         top_sells = radar.get("top_sells", [])
@@ -288,7 +322,7 @@ class ContentCreatorAgent:
 
         slide1 = SlideContent(
             slide_number=1,
-            total_slides=5,
+            total_slides=total_slides,
             category=theme_badge,
             category_color=badge_color,
             sub_headline="FPL TRANSFER RADAR: MARKET MOVERS",
@@ -305,7 +339,7 @@ class ContentCreatorAgent:
 
         slide2 = SlideContent(
             slide_number=2,
-            total_slides=5,
+            total_slides=total_slides,
             category="TOP PRICE RISER",
             category_color=badge_color,
             sub_headline=f"SURGING: {b1['name'].upper()} ({b1['team'].upper()})",
@@ -322,7 +356,7 @@ class ContentCreatorAgent:
 
         slide3 = SlideContent(
             slide_number=3,
-            total_slides=5,
+            total_slides=total_slides,
             category="MASS EXODUS",
             category_color=badge_color,
             sub_headline=f"FALLING: {s1['name'].upper()} ({s1['team'].upper()})",
@@ -339,7 +373,7 @@ class ContentCreatorAgent:
 
         slide4 = SlideContent(
             slide_number=4,
-            total_slides=5,
+            total_slides=total_slides,
             category="MOMENTUM PICK",
             category_color=badge_color,
             sub_headline=f"VALUE BUY: {b2['name'].upper()} ({b2['team'].upper()})",
@@ -356,7 +390,7 @@ class ContentCreatorAgent:
 
         slide5 = SlideContent(
             slide_number=5,
-            total_slides=5,
+            total_slides=total_slides,
             category="FAN STRATEGY",
             category_color=badge_color,
             sub_headline="WHAT IS YOUR NEXT TRANSFER?",
@@ -366,6 +400,8 @@ class ContentCreatorAgent:
             brand_handle=channel.brand_handle,
         )
 
+        slide6 = self._build_outro_slide(6, total_slides, channel, theme_badge, badge_color)
+
         caption = (
             f"📈 [{theme_badge}] FPL Transfer Radar: Top Price Risers & Fallers\n\n"
             f"Huge market shifts ahead of the upcoming deadline. Don't lose team value!\n\n"
@@ -374,7 +410,8 @@ class ContentCreatorAgent:
             f"• {b2['name']} ({b2['team']}) - {b2['cost']} ({b2['transfers']})\n\n"
             f"🔴 Top Sells (Price Drop Warning):\n"
             f"• {s1['name']} ({s1['team']}) - {s1['cost']} ({s1['transfers']})\n\n"
-            f"👇 What transfer are you locking in? Let us know below!\n\n"
+            f"👉 Follow @MatchdayEPL for daily Premier League tactics & FPL market movers!\n"
+            f"❤️ Like & Save to keep your rank rising!\n\n"
             f"#FPL #FPLTransfers #FPLPriceChanges #FPLCommunity #PremierLeague #MatchdayEPL"
         )
 
@@ -385,7 +422,7 @@ class ContentCreatorAgent:
             caption=caption,
             badge_color=badge_color,
             hashtags=["#FPL", "#FPLTransfers", "#FPLPriceChanges", "#FPLCommunity", "#MatchdayEPL"],
-            slides=[slide1, slide2, slide3, slide4, slide5],
+            slides=[slide1, slide2, slide3, slide4, slide5, slide6],
         )
 
     def _create_fpl_scout(
@@ -397,11 +434,12 @@ class ContentCreatorAgent:
         theme_badge = "FPL SCOUT"
         palette = resolve_theme_palette(theme_badge)
         badge_color = palette.primary
+        total_slides = 6
         facts = news.verified_facts
 
         slide1 = SlideContent(
             slide_number=1,
-            total_slides=5,
+            total_slides=total_slides,
             category=theme_badge,
             category_color=badge_color,
             sub_headline="PREMIER LEAGUE RETURNS",
@@ -419,7 +457,7 @@ class ContentCreatorAgent:
         fact1 = facts[0]
         slide2 = SlideContent(
             slide_number=2,
-            total_slides=5,
+            total_slides=total_slides,
             category="KEY FIXTURES",
             category_color=badge_color,
             sub_headline="MATCHES TO WATCH",
@@ -437,7 +475,7 @@ class ContentCreatorAgent:
         fact2 = facts[1]
         slide3 = SlideContent(
             slide_number=3,
-            total_slides=5,
+            total_slides=total_slides,
             category="CAPTAINCY PICK",
             category_color=badge_color,
             sub_headline=fact2.headline,
@@ -455,7 +493,7 @@ class ContentCreatorAgent:
         fact3 = facts[2]
         slide4 = SlideContent(
             slide_number=4,
-            total_slides=5,
+            total_slides=total_slides,
             category="DIFFERENTIAL",
             category_color=badge_color,
             sub_headline=fact3.headline,
@@ -472,7 +510,7 @@ class ContentCreatorAgent:
 
         slide5 = SlideContent(
             slide_number=5,
-            total_slides=5,
+            total_slides=total_slides,
             category="FAN VERDICT",
             category_color=badge_color,
             sub_headline="WHO IS YOUR CAPTAIN?",
@@ -482,10 +520,13 @@ class ContentCreatorAgent:
             brand_handle=channel.brand_handle,
         )
 
+        slide6 = self._build_outro_slide(6, total_slides, channel, theme_badge, badge_color)
+
         caption = (
             f"🚨 [{theme_badge}] {news.summary_headline}\n\n"
             f"The Premier League is officially BACK. Swipe through for the complete opening fixture guide, top captain picks, and high-upside differentials.\n\n"
-            f"👇 Who gets your Gameweek 1 armband? Drop your team in the comments!\n\n"
+            f"👉 Follow @MatchdayEPL for daily Premier League news & FPL tips!\n"
+            f"❤️ Like & Save to support the channel!\n\n"
             f"#PremierLeague #FPL #Gameweek1 #EPL #MatchdayEPL #FantasyPremierLeague"
         )
 
@@ -496,5 +537,5 @@ class ContentCreatorAgent:
             caption=caption,
             badge_color=badge_color,
             hashtags=["#PremierLeague", "#FPL", "#Gameweek1", "#MatchdayEPL"],
-            slides=[slide1, slide2, slide3, slide4, slide5],
+            slides=[slide1, slide2, slide3, slide4, slide5, slide6],
         )

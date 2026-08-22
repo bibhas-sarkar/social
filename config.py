@@ -41,7 +41,7 @@ class CarouselContent(BaseModel):
     caption: str
     badge_color: Optional[str] = Field(default=None, description="Theme badge color for the carousel")
     hashtags: List[str] = Field(default_factory=list)
-    slides: List[SlideContent] = Field(min_length=5, max_length=5)
+    slides: List[SlideContent] = Field(min_length=5, max_length=10)
 
 
 class ThemePalette(BaseModel):

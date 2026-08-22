@@ -183,8 +183,42 @@
       {% endif %}
     </div>
 
-    <!-- Bottom Feature Block: Large Stat Box OR Interactive CTA -->
-    {% if stat_box %}
+    <!-- Bottom Feature Block: Large Stat Box OR Interactive CTA OR Follow Outro -->
+    {% if stat_box and stat_box.value == 'FOLLOW' %}
+    <!-- Dedicated High-Converting Follow & Like Outro Block -->
+    <div class="glass-stat-highlight rounded-[32px] p-10 min-h-[200px] flex items-center justify-between" style="border-color: {{ pill_color }}99; box-shadow: 0 0 45px {{ pill_color }}33;">
+      <div class="grid grid-cols-4 gap-6 w-full items-center">
+        <!-- 1. Like Action -->
+        <div class="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+          <div class="w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg" style="background-color: #EF444433; color: #EF4444; border: 1px solid #EF444499;">
+            ❤️
+          </div>
+          <span class="text-xs font-mono font-extrabold tracking-wider uppercase text-slate-200">LIKE</span>
+        </div>
+        <!-- 2. Comment Action -->
+        <div class="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+          <div class="w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg" style="background-color: {{ pill_color }}33; color: {{ pill_color }}; border: 1px solid {{ pill_color }}99;">
+            💬
+          </div>
+          <span class="text-xs font-mono font-extrabold tracking-wider uppercase text-slate-200">COMMENT</span>
+        </div>
+        <!-- 3. Save Action -->
+        <div class="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+          <div class="w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg" style="background-color: #F59E0B33; color: #F59E0B; border: 1px solid #F59E0B99;">
+            🔖
+          </div>
+          <span class="text-xs font-mono font-extrabold tracking-wider uppercase text-slate-200">SAVE</span>
+        </div>
+        <!-- 4. Follow Action -->
+        <div class="flex flex-col items-center justify-center p-4 rounded-2xl space-y-2 shadow-2xl" style="background-color: {{ pill_color }};">
+          <div class="w-14 h-14 rounded-full flex items-center justify-center text-2xl bg-black text-white font-cabinet font-black">
+            +
+          </div>
+          <span class="text-xs font-mono font-black tracking-wider uppercase text-black">FOLLOW</span>
+        </div>
+      </div>
+    </div>
+    {% elif stat_box %}
     <div class="glass-stat-highlight rounded-[32px] p-11 min-h-[190px] flex items-center justify-between">
       <div class="space-y-2 max-w-[62%]">
         <div class="text-base font-mono font-extrabold tracking-widest uppercase" style="color: {{ pill_color }};">

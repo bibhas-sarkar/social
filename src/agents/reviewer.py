@@ -89,8 +89,8 @@ class ReviewerAgent:
         """Validates structure, slide count, and basic fields."""
         issues: List[str] = []
 
-        if len(carousel.slides) != 5:
-            issues.append(f"Carousel must contain exactly 5 slides, found {len(carousel.slides)}")
+        if len(carousel.slides) not in (5, 6):
+            issues.append(f"Carousel must contain 5 or 6 slides, found {len(carousel.slides)}")
 
         for slide in carousel.slides:
             word_count = len(slide.main_text.strip().split())
@@ -297,23 +297,23 @@ class ReviewerAgent:
                 )
 
             # --- Check G: Narrative Role Compliance ---
-            if slide.slide_number == 5:
-                if not any(q in slide_combined for q in ["?", "who", "comment", "predict", "verdict"]):
+            if slide.slide_number in (5, len(carousel.slides)):
+                if not any(q in slide_combined for q in ["?", "who", "comment", "predict", "verdict", "follow", "like", "save"]):
                     entries.append(
                         AuditEntry(
-                            slide_number=5,
+                            slide_number=slide.slide_number,
                             check_type="NARRATIVE_CHECK",
                             status="WARNING",
-                            details="Slide 5 should ideally include a question or prompt to encourage comments.",
+                            details="Slide should ideally include a question, debate prompt, or follow CTA.",
                         )
                     )
                 else:
                     entries.append(
                         AuditEntry(
-                            slide_number=5,
+                            slide_number=slide.slide_number,
                             check_type="NARRATIVE_CHECK",
                             status="PASSED",
-                            details="Slide 5 verified as comment CTA block.",
+                            details=f"Slide {slide.slide_number} verified as engagement/outro CTA block.",
                         )
                     )
 
